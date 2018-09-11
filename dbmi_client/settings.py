@@ -30,7 +30,7 @@ CONFIG_DEFAULTS = {
     'AUTHN_BRANDING': {
         'TITLE': 'DBMI Client',
         'ICON_URL': 'https://authentication.dbmi.hms.harvard.edu/static/hms_shield.png',
-    }
+    },
 }
 
 CLIENT_CONFIG = getattr(settings, 'DBMI_CLIENT_CONFIG', {})
@@ -47,7 +47,7 @@ if 'CLIENT_IDS' not in CLIENT_CONFIG['AUTH0']:
 if 'DOMAIN' not in CLIENT_CONFIG['AUTH0']:
     raise AttributeError('AUTH0.DOMAIN configuration must be set')
 
-if 'ENVIRONMENT' in CLIENT_CONFIG and CLIENT_CONFIG['environment'] != 'production':
+if 'ENVIRONMENT' in CLIENT_CONFIG and CLIENT_CONFIG['ENVIRONMENT'] != 'production':
     warnings.warn(
         "ENVIRONMENT is not set to production, this should be a test or dev environment", ResourceWarning)
 
