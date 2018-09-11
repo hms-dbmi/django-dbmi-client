@@ -121,7 +121,7 @@ def get_public_keys_from_auth0(refresh=False):
             logger.debug('Fetching remote JWKS')
 
             # Build the JWKs URL
-            url = furl(dbmi_conf('AUTH0')['DOMAIN'])
+            url = furl().set(scheme='https', host=dbmi_conf('AUTH0')['DOMAIN'])
             url.path.segments.extend(['.well-known', 'jwks.json'])
 
             # Make the request

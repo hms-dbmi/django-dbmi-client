@@ -13,9 +13,9 @@ from django.conf import settings
 CONFIG_DEFAULTS = {
     # Client options, assume production environment
     'ENVIRONMENT': 'production',
-    'AUTHN_URL': 'https://authentication.dbmi.hms.harvard.edu/',
-    'AUTHZ_URL': 'https://authorization.dbmi.hms.harvard.edu/',
-    'REG_URL': 'https://registration.dbmi.hms.harvard.edu/',
+    'AUTHN_URL': 'https://authentication.dbmi.hms.harvard.edu',
+    'AUTHZ_URL': 'https://authorization.dbmi.hms.harvard.edu',
+    'REG_URL': 'https://registration.dbmi.hms.harvard.edu',
     'AUTHZ_ADMIN_GROUP': 'dbmi-admin',
     'AUTHZ_USER_GROUP': 'dbmi-user',
     'JWT_AUTHZ_NAMESPACE': 'https://authorization.dbmi.hms.harvard.edu',

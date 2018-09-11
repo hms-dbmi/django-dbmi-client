@@ -86,7 +86,7 @@ def has_permission(request, email, permission):
         # Parse permissions
         for permission_result in response.json().get('results'):
             if permission_result['permission'].lower() == permission.lower():
-                logger.debug('DBMIAuthZ: {} has {} on {}'.format(email, permission.value, dbmi_conf('CLIENT')))
+                logger.debug('DBMIAuthZ: {} has {} on {}'.format(email, permission, dbmi_conf('CLIENT')))
                 return True
 
     except (requests.HTTPError, TypeError, KeyError):
