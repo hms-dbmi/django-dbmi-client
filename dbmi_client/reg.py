@@ -54,9 +54,10 @@ def check_email_confirmation(request):
     # Build the URL (needs trailing slash)
     url = furl(dbmi_conf('REG_URL'))
     url.path.segments.extend(['api', 'register', ''])
+    url.query.params.add('email', authn.get_jwt_email(request, verify=False))
 
     # Make the call
-    response = requests.post(url.url, headers=authn.dbmi_http_headers(request))
+    response = requests.get(url.url, headers=authn.dbmi_http_headers(request))
     if not response.ok:
         logger.error('Confirmation email response: {}'.format(response.content))
         return None
