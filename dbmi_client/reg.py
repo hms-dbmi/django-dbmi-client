@@ -18,9 +18,9 @@ def create_dbmi_user(request, **profile):
     # Update kwargs
     profile['email'] = email
 
-    # Build the URL
+    # Build the URL (needs trailing slash)
     url = furl(dbmi_conf('REG_URL'))
-    url.path.segments.extend(['api', 'register'])
+    url.path.segments.extend(['api', 'register', ''])
 
     response = requests.post(url.url, headers=authn.dbmi_http_headers(request), data=json.dumps(profile))
     if not response.ok:
@@ -32,9 +32,9 @@ def create_dbmi_user(request, **profile):
 def send_email_confirmation(request, success_url):
     logger.debug("Sending confirmation email")
 
-    # Build the URL
+    # Build the URL (needs trailing slash)
     url = furl(dbmi_conf('REG_URL'))
-    url.path.segments.extend(['api', 'register', 'send_confirmation_email'])
+    url.path.segments.extend(['api', 'register', 'send_confirmation_email', ''])
 
     data = {
         'success_url': success_url
@@ -51,9 +51,9 @@ def send_email_confirmation(request, success_url):
 def check_email_confirmation(request):
     logger.debug("Checking email confirmation")
 
-    # Build the URL
+    # Build the URL (needs trailing slash)
     url = furl(dbmi_conf('REG_URL'))
-    url.path.segments.extend(['api', 'register'])
+    url.path.segments.extend(['api', 'register', ''])
 
     # Make the call
     response = requests.post(url.url, headers=authn.dbmi_http_headers(request))
