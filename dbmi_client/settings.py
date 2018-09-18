@@ -102,4 +102,8 @@ def dbmi_conf(key):
     Just returns the value for the given key
     """
     # Return the value
-    return CONFIG[key]
+    if key not in CONFIG:
+        warnings.warn("Configuration \'{}\' does not exist".format(key), ResourceWarning)
+        return None
+
+    return CONFIG.get(key)

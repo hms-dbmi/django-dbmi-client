@@ -260,12 +260,10 @@ def validate_rs256_jwt(jwt_string):
             return payload
 
         except jwt.ExpiredSignatureError as err:
-            logger.error(str(err))
-            logger.error("JWT Expired.")
+            logger.warning("JWT Expired: {}".format(err))
 
         except jwt.InvalidTokenError as err:
-            logger.error(str(err))
-            logger.error("Invalid JWT Token.")
+            logger.warning("Invalid JWT Token: {}".format(err))
 
     return None
 
@@ -323,4 +321,4 @@ class DBMIUser(BaseAuthentication):
 
         # Return the user's email to attach to the request object (request.user)
         # Also, return the authz dictionary contained in the JWT claims, if present (request.auth)
-        return payload.get('email'), payload.get(dbmi_conf('JWT_AUTHZ_NAMESPACE'), None)
+        return payload.get('email'), payload.get(dbmi_conf('JWT_AUTHZ_NAMESPACE'))

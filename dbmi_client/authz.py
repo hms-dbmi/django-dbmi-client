@@ -19,7 +19,7 @@ JWT_AUTHZ_PERMISSIONS = 'permissions'
 DBMI_ADMIN_PERMISSION = 'MANAGE'
 
 
-def has_authz_claim(claims, type, item):
+def jwt_has_authz(claims, auth_type, item):
     """
     Inspects the JWT claims for the permission. This assumed a claims dictionary is
     namespaced under DBMIAuth.dbmi_authz_namespace and 'type' is a key to a list of items
@@ -28,26 +28,46 @@ def has_authz_claim(claims, type, item):
     claims are missing, indicating the check is inconclusive and another source must
     be checked, likely DBMIAuthz.
     :param claims: The JWT claims dictionary
-    :param type: The type of authorization: group, role, permission
+    :param auth_type: The type of authorization: group, role, permission
     :param item: The specific authorization to check exists for the given type
     :return: None if not defined, bool otherwise
     """
+    try:
+        # Call the other method with the authz claims object
+        auth = claims[dbmi_conf('JWT_AUTHZ_NAMESPACE')]
+        return auth_has_authz(auth, auth_type, item)
 
+    except (KeyError, IndexError, TypeError, ValueError):
+        logger.debug('No authz and/or authz type ({}) in JWT claims'.format(auth_type))
+
+    return None
+
+
+def auth_has_authz(auth, auth_type, item):
+    """
+    Inspects the DRF auth object for the permission. This assumed a claims dictionary
+    was copied from the namespaced JWT claims to the DRF auth object. See above for info
+    on authorization types contained in the JWT.
+    :param auth: The DRF auth object
+    :param auth_type: The type of authorization: group, role, permission
+    :param item: The specific authorization to check exists for the given type
+    :return: None if not defined, bool otherwise
+    """
     try:
         # Check groups
-        for _item in claims[dbmi_conf('JWT_AUTHZ_NAMESPACE')][type]:
+        for _item in auth[auth_type]:
 
             # Compare
             if _item == item:
-                logger.debug('User has authz: {} - {}'.format(type, item))
+                logger.debug('User has authz: {} - {}'.format(auth_type, item))
                 return True
 
         return False
 
-    except KeyError:
-        logger.debug('No authz and/or authz type ({}) in JWT claims'.format(type))
+    except (KeyError, IndexError, TypeError, ValueError):
+        logger.debug('No authz and/or authz type ({})'.format(auth_type))
 
-        return None
+    return None
 
 
 def has_permission(request, email, permission):
@@ -115,10 +135,9 @@ class DBMIManagePermission(BasePermission):
             logger.warning('No \'user\' attribute on request')
             raise PermissionDenied
 
-        # Check claims in the JWT first, as it is least costly.
+        # Ensure claims are setup and then check them first, as it is least costly.
         if request.auth:
-            payload = {dbmi_conf('JWT_AUTHZ_NAMESPACE'): request.auth}
-            if has_authz_claim(payload, JWT_AUTHZ_PERMISSIONS, DBMI_ADMIN_PERMISSION):
+            if auth_has_authz(request.auth, JWT_AUTHZ_PERMISSIONS, DBMI_ADMIN_PERMISSION):
                 return True
 
         # Check permissions
@@ -149,10 +168,9 @@ class DBMIManageOrOwnerPermission(BasePermission):
         if hasattr(obj, 'email') and obj.email == request.user:
             return True
 
-        # Check claims in the JWT first, as it is least costly.
+        # Ensure claims are setup and then check them first, as it is least costly.
         if request.auth:
-            payload = {dbmi_conf('JWT_AUTHZ_NAMESPACE'): request.auth}
-            if has_authz_claim(payload, JWT_AUTHZ_PERMISSIONS, DBMI_ADMIN_PERMISSION):
+            if auth_has_authz(request.auth, JWT_AUTHZ_PERMISSIONS, DBMI_ADMIN_PERMISSION):
                 return True
 
         # Lastly, check permission server for admin permissions

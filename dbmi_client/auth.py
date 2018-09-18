@@ -1,4 +1,8 @@
 from django.core.exceptions import PermissionDenied
+from django.contrib.auth import get_user_model
+from django.contrib import auth as django_auth
+from django.contrib.auth import login as django_login
+from django.contrib.auth import logout as django_logout
 
 from dbmi_client.settings import dbmi_conf
 from dbmi_client import authn
@@ -54,7 +58,7 @@ def dbmi_admin(view):
             return authn.logout_redirect(request)
 
         # Check claims in the JWT first, as it is least costly.
-        if authz.has_authz_claim(payload, authz.JWT_AUTHZ_GROUPS, dbmi_conf('AUTHZ_ADMIN_GROUP')):
+        if authz.jwt_has_authz(payload, authz.JWT_AUTHZ_GROUPS, dbmi_conf('AUTHZ_ADMIN_GROUP')):
             return view(request, *args, **kwargs)
 
         # Now consult the AuthZ server
@@ -95,7 +99,7 @@ def dbmi_group(group):
                 email = jwt_payload.get('email')
 
                 # Check claims in the JWT first, as it is least costly.
-                if authz.has_authz_claim(jwt_payload, authz.JWT_AUTHZ_GROUPS, group):
+                if authz.jwt_has_authz(jwt_payload, authz.JWT_AUTHZ_GROUPS, group):
                     return view(request, *args, **kwargs)
 
                 # Possibly store these elsewhere for records
@@ -139,7 +143,7 @@ def dbmi_permission(permission):
                 email = jwt_payload.get('email')
 
                 # Check claims in the JWT first, as it is least costly.
-                if authz.has_authz_claim(jwt_payload, authz.JWT_AUTHZ_PERMISSIONS, permission):
+                if authz.jwt_has_authz(jwt_payload, authz.JWT_AUTHZ_PERMISSIONS, permission):
                     return view(request, *args, **kwargs)
 
                 # Check permission
@@ -187,7 +191,7 @@ def dbmi_role(role):
                 email = jwt_payload.get('email')
 
                 # Check claims in the JWT first, as it is least costly.
-                if authz.has_authz_claim(jwt_payload, authz.JWT_AUTHZ_ROLES, role):
+                if authz.jwt_has_authz(jwt_payload, authz.JWT_AUTHZ_ROLES, role):
                     return view(request, *args, **kwargs)
 
                 # Possibly store these elsewhere for records
@@ -206,3 +210,66 @@ def dbmi_role(role):
         return wrap
 
     return real_decorator
+
+
+def dbmi_user_and_auth(function):
+    '''
+    Decorator to verify both the JWT as well as the session
+    of the current user in order to control access to the
+    given method or view. JWT email is also compared to the
+    Django user's email and must match. Redirects back to
+    authentication server if not all conditions are satisfied.
+    :param function: The protected method
+    :return: decorator
+    '''
+    def wrap(request, *args, **kwargs):
+
+        # Get the token
+        token = authn.get_jwt(request)
+        if not token:
+            return authn.logout_redirect(request)
+
+        # Check JWT and session
+        payload = authn.validate_rs256_jwt(token)
+        if request.user.is_authenticated() and payload is not None:
+
+            # Ensure the email matches (without case sensitivity)
+            if request.user.username.lower() != payload['email'].lower():
+                logger.warning('Django and JWT email mismatch! Log them out and redirect to log back in')
+                django_logout(request)
+                return authn.logout_redirect(request)
+
+            return function(request, *args, **kwargs)
+
+        # User has a JWT session open but not a Django session. Start a Django session and continue the request.
+        elif not request.user.is_authenticated() and payload is not None:
+
+            # Log the user in through Django's auth system
+            request.session['profile'] = payload
+            user = django_auth.authenticate(**payload)
+            if user:
+                django_login(request, user)
+            else:
+                logger.warning("Could not log user in: {}".format(authn.get_jwt_email(request, verify=False)))
+
+            # Check authentication
+            if request.user.is_authenticated():
+                return function(request, *args, **kwargs)
+
+            # Bail and send them back to login
+            else:
+                django_logout(request)
+                return authn.logout_redirect(request)
+
+        elif payload is None and request.user.is_authenticated():
+
+            # The user's session exists with django but their JWT has expired, log them out and
+            # send them back to login
+            django_logout(request)
+            return authn.logout_redirect(request)
+
+        else:
+            return authn.logout_redirect(request)
+    wrap.__doc__ = function.__doc__
+    wrap.__name__ = function.__name__
+    return wrap
