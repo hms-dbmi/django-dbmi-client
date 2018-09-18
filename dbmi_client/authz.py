@@ -7,8 +7,8 @@ from rest_framework.exceptions import PermissionDenied
 from dbmi_client.settings import dbmi_conf
 from dbmi_client import authn
 
-import logging
-logger = logging.getLogger(__name__)
+from dbmi_client.settings import get_logger
+logger = get_logger()
 
 # Set keys for authz dictionary
 JWT_AUTHZ_GROUPS = 'groups'
@@ -168,6 +168,10 @@ class DBMIManageOrOwnerPermission(BasePermission):
         if hasattr(obj, 'email') and obj.email == request.user:
             return True
 
+        # Check for a user attribute
+        if hasattr(obj, 'user') and obj.user == request.user:
+            return True
+
         # Ensure claims are setup and then check them first, as it is least costly.
         if request.auth:
             if auth_has_authz(request.auth, JWT_AUTHZ_PERMISSIONS, DBMI_ADMIN_PERMISSION):
@@ -198,6 +202,10 @@ class DBMIOwnerPermission(BasePermission):
 
         # JWT email must be related to given object email
         if hasattr(obj, 'email') and obj.email == request.user:
+            return True
+
+        # Check for a user attribute
+        if hasattr(obj, 'user') and obj.user == request.user:
             return True
 
         raise PermissionDenied

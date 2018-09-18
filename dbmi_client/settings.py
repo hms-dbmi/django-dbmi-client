@@ -1,6 +1,7 @@
 from __future__ import absolute_import, unicode_literals
 
 import warnings
+import logging
 
 from django.conf import settings
 
@@ -34,6 +35,7 @@ CONFIG_DEFAULTS = {
     'JWT_HTTP_PREFIX': 'JWT ',
     'JWT_COOKIE_NAME': 'DBMI_JWT',
     'JWT_COOKIE_DOMAIN': '.dbmi.hms.harvard.edu',
+    'ENABLE_LOGGING': True,
     'AUTH0': {
         'CLIENT_IDS': ['!!! must be configured by client !!!'],
         'DOMAIN': 'dbmiauth.auth0.com',
@@ -42,6 +44,7 @@ CONFIG_DEFAULTS = {
         'TITLE': 'DBMI Client',
         'ICON_URL': 'https://authentication.dbmi.hms.harvard.edu/static/hms_shield.png',
     },
+    'USE_DJANGO_AUTH': False,
 }
 
 CLIENT_CONFIG = getattr(settings, 'DBMI_CLIENT_CONFIG', {})
@@ -95,6 +98,28 @@ if 'JWT_COOKIE_NAME' in CLIENT_CONFIG:
 # Merge client and default configurations
 CONFIG = CONFIG_DEFAULTS.copy()
 CONFIG.update(CLIENT_CONFIG)
+
+# Do some configs
+if CONFIG['USE_DJANGO_AUTH']:
+
+    # Set the backend
+    backends = ['dbmi_client.authn.DBMIAuthenticationBackend']
+    backends.extend(settings.AUTHENTICATION_BACKENDS)
+    settings.AUTHENTICATION_BACKENDS = backends
+
+
+def get_logger():
+    """
+    Returns the logger and manages whether logs propogate or not depending on user configs
+    :return: logger
+    """
+    logger = logging.getLogger(__name__)
+
+    # Check if disabled
+    if not dbmi_conf('ENABLE_LOGGING'):
+        logger.propagate = False
+
+    return logger
 
 
 def dbmi_conf(key):

@@ -5,6 +5,7 @@ import base64
 import requests
 import jwcrypto.jwk as jwk
 
+from django.contrib.auth import get_user_model
 from django.conf import settings
 from django.shortcuts import redirect
 from django.contrib.auth import logout
@@ -12,9 +13,10 @@ from rest_framework.authentication import BaseAuthentication
 from rest_framework import exceptions
 
 from dbmi_client.settings import dbmi_conf
+from dbmi_client import authz
 
-import logging
-logger = logging.getLogger(__name__)
+from dbmi_client.settings import get_logger
+logger = get_logger()
 
 
 def dbmi_http_headers(request, content_type='application/json', **kwargs):
@@ -137,13 +139,13 @@ def get_public_keys_from_auth0(refresh=False):
             return jwks
 
     except KeyError as e:
-        logging.exception(e)
+        logger.exception(e)
 
     except json.JSONDecodeError as e:
-        logging.exception(e)
+        logger.exception(e)
 
     except requests.HTTPError as e:
-        logging.exception(e)
+        logger.exception(e)
 
     return None
 
@@ -295,6 +297,59 @@ def logout_redirect(request):
     logger.debug('Redirecting to: {}'.format(login_url.url))
 
     return response
+
+###################################################################
+#
+# Django Custom Authentication Backend
+#
+###################################################################
+
+
+class DBMIAuthenticationBackend(object):
+
+    def authenticate(self, **token_dictionary):
+        logger.debug("Attempting to Authenticate User")
+
+        # Get the user model
+        user_model = get_user_model()
+
+        try:
+            # Try and fetch the user
+            user = user_model.objects.get(username=token_dictionary["email"])
+
+        except user_model.DoesNotExist:
+            logger.debug("User not found, creating.")
+
+            # User does not exist, create them
+            user = user_model(username=token_dictionary["email"], email=token_dictionary["email"])
+
+            # Check their JWT for admin status or for root admin permissions
+            if authz.jwt_has_authz(token_dictionary,
+                                   authz.JWT_AUTHZ_GROUPS,
+                                   dbmi_conf('AUTHZ_ADMIN_GROUP')) or \
+               authz.jwt_has_authz(token_dictionary,
+                                   authz.JWT_AUTHZ_PERMISSIONS,
+                                   '{}.{}'.format(dbmi_conf('CLIENT'), authz.DBMI_ADMIN_PERMISSION)):
+                    logger.debug('User {} has is in the admin group, adding superuser privileges')
+                    user.is_superuser = True
+                    user.is_staff = True
+
+            # Check AuthZ service for MANAGE permission
+            elif dbmi_conf('AUTHZ_ADMIN_GROUP'):
+                if authz.jwt_has_authz(token_dictionary, authz.JWT_AUTHZ_GROUPS, dbmi_conf('AUTHZ_ADMIN_GROUP')):
+                    logger.debug('User {} has is in the admin group, adding superuser privileges')
+                    user.is_superuser = True
+                    user.is_staff = True
+
+            user.save()
+
+        return user
+
+    def get_user(self, user_id):
+        try:
+            return get_user_model().objects.get(pk=user_id)
+        except get_user_model().DoesNotExist:
+            return None
 
 ###################################################################
 #

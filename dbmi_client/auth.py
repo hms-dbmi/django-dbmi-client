@@ -1,5 +1,4 @@
 from django.core.exceptions import PermissionDenied
-from django.contrib.auth import get_user_model
 from django.contrib import auth as django_auth
 from django.contrib.auth import login as django_login
 from django.contrib.auth import logout as django_logout
@@ -8,8 +7,8 @@ from dbmi_client.settings import dbmi_conf
 from dbmi_client import authn
 from dbmi_client import authz
 
-import logging
-logger = logging.getLogger(__name__)
+from dbmi_client.settings import get_logger
+logger = get_logger()
 
 
 def dbmi_user(view):
@@ -270,6 +269,7 @@ def dbmi_user_and_auth(function):
 
         else:
             return authn.logout_redirect(request)
+
     wrap.__doc__ = function.__doc__
     wrap.__name__ = function.__name__
     return wrap

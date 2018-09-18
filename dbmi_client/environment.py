@@ -1,7 +1,8 @@
 import os
 import json
-import logging
-logger = logging.getLogger(__name__)
+
+from dbmi_client.settings import get_logger
+logger = get_logger()
 
 __all__ = ['BASE_DIR', 'absolute_path', 'get_int', 'get_bool', 'get_str', 'get_list', 'get_dict']
 

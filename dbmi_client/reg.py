@@ -5,8 +5,8 @@ import json
 from dbmi_client import authn
 from dbmi_client.settings import dbmi_conf
 
-import logging
-logger = logging.getLogger(__name__)
+from dbmi_client.settings import get_logger
+logger = get_logger()
 
 
 def create_dbmi_user(request, **profile):
