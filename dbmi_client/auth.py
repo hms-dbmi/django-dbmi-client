@@ -1,7 +1,5 @@
 from django.core.exceptions import PermissionDenied
 from django.contrib import auth as django_auth
-from django.contrib.auth import login as django_login
-from django.contrib.auth import logout as django_logout
 
 from dbmi_client.settings import dbmi_conf
 from dbmi_client import authn
@@ -21,17 +19,18 @@ def dbmi_user(view):
     '''
     def wrap(request, *args, **kwargs):
 
-        # Get the token
-        token = authn.get_jwt(request)
+        # Validate request
+        token, payload = _token_auth(request)
         if not token:
             return authn.logout_redirect(request)
 
-        # User has a valid JWT from SciAuth
-        if authn.validate_rs256_jwt(token):
-            return view(request, *args, **kwargs)
-
-        else:
+        # Check if we are using model auth
+        if dbmi_conf('USER_MODEL_ENABLED') and not _model_auth(request, token):
+            logger.debug('JWT checked out but user could not be created/fetched from model')
             return authn.logout_redirect(request)
+
+        # Let it go
+        return view(request, *args, **kwargs)
 
     return wrap
 
@@ -46,28 +45,31 @@ def dbmi_admin(view):
     '''
     def wrap(request, *args, **kwargs):
 
-        # Get the token
-        token = authn.get_jwt(request)
+        # Validate request
+        token, payload = _token_auth(request)
         if not token:
             return authn.logout_redirect(request)
 
-        # Validate request
-        payload = authn.validate_rs256_jwt(token)
-        if not payload:
+        # Check if we are using model auth
+        if dbmi_conf('USER_MODEL_ENABLED') and not _model_auth(request, token):
+            logger.debug('JWT checked out but user could not be created/fetched from model')
             return authn.logout_redirect(request)
 
         # Check claims in the JWT first, as it is least costly.
         if authz.jwt_has_authz(payload, authz.JWT_AUTHZ_GROUPS, dbmi_conf('AUTHZ_ADMIN_GROUP')):
             return view(request, *args, **kwargs)
 
+        # Get their email address
+        email = authn.get_jwt_email(request, verify=False)
+
         # Now consult the AuthZ server
-        if authz.has_permission(request, payload.get('email'), authz.DBMI_ADMIN_PERMISSION):
+        if authz.has_permission(request, email, dbmi_conf('CLIENT'), dbmi_conf('AUTHZ_ADMIN_PERMISSION')):
             return view(request, *args, **kwargs)
 
         # Possibly store these elsewhere for records
         # TODO: Figure out a better way to flag failed access attempts
-        logger.warning('{} Failed {} permission on {}'.format(payload.get('email'),
-                                                              authz.DBMI_ADMIN_PERMISSION,
+        logger.warning('{} Failed {} permission on {}'.format(email,
+                                                              dbmi_conf('AUTHZ_ADMIN_PERMISSION'),
                                                               dbmi_conf('CLIENT')))
 
         raise PermissionDenied
@@ -88,77 +90,26 @@ def dbmi_group(group):
 
         def wrap(request, *args, **kwargs):
 
-            # Validates the JWT and returns its payload if valid.
-            jwt_payload = authn.validate_request(request)
-
-            # User has a valid JWT from SciAuth
-            if jwt_payload is not None:
-
-                # Get the email
-                email = jwt_payload.get('email')
-
-                # Check claims in the JWT first, as it is least costly.
-                if authz.jwt_has_authz(jwt_payload, authz.JWT_AUTHZ_GROUPS, group):
-                    return view(request, *args, **kwargs)
-
-                # Possibly store these elsewhere for records
-                # TODO: Figure out a better way to flag failed access attempts
-                logger.warning('{} Failed {} group on {}'.format(email, group, dbmi_conf('CLIENT')))
-
-                # Forbid if nothing else
-                raise PermissionDenied
-
-            else:
-                logger.debug('Missing/invalid JWT, sending to login')
+            # Validate request
+            token, payload = _token_auth(request)
+            if not token:
                 return authn.logout_redirect(request)
 
-        wrap.__doc__ = view.__doc__
-        wrap.__name__ = view.__name__
-        return wrap
-
-    return real_decorator
-
-
-def dbmi_permission(permission):
-    '''
-    Decorator that accepts an item string that is used to retrieve
-    permissions from SciAuthZ.
-    :param permission: The permission
-    :type permission: str
-    :return: function
-    '''
-
-    def real_decorator(view):
-
-        def wrap(request, *args, **kwargs):
-
-            # Validates the JWT and returns its payload if valid.
-            jwt_payload = authn.validate_request(request)
-
-            # User has a valid JWT from SciAuth
-            if jwt_payload is not None:
-
-                # Get the email
-                email = jwt_payload.get('email')
-
-                # Check claims in the JWT first, as it is least costly.
-                if authz.jwt_has_authz(jwt_payload, authz.JWT_AUTHZ_PERMISSIONS, permission):
-                    return view(request, *args, **kwargs)
-
-                # Check permission
-                if authz.has_permission(request, email, permission):
-                    return view(request, *args, **kwargs)
-
-                # Possibly store these elsewhere for records
-                # TODO: Figure out a better way to flag failed access attempts
-                logger.warning('{} Failed {} permission on {}'.format(email, permission, dbmi_conf('CLIENT')))
-
-                # Forbid if nothing else
-                raise PermissionDenied
-
-            else:
-                logger.debug('Missing/invalid JWT, sending to login')
+            # Check if we are using model auth
+            if dbmi_conf('USER_MODEL_ENABLED') and not _model_auth(request, token):
+                logger.debug('JWT checked out but user could not be created/fetched from model')
                 return authn.logout_redirect(request)
+
+            # Check claims in the JWT first, as it is least costly.
+            if authz.jwt_has_authz(payload, authz.JWT_AUTHZ_GROUPS, group):
+                return view(request, *args, **kwargs)
+
+            # Possibly store these elsewhere for records
+            # TODO: Figure out a better way to flag failed access attempts
+            logger.warning('{} Failed {} group on {}'.format(payload.get('email'), group, dbmi_conf('CLIENT')))
+
+            # Forbid if nothing else
+            raise PermissionDenied
 
         wrap.__doc__ = view.__doc__
         wrap.__name__ = view.__name__
@@ -180,29 +131,26 @@ def dbmi_role(role):
 
         def wrap(request, *args, **kwargs):
 
-            # Validates the JWT and returns its payload if valid.
-            jwt_payload = authn.validate_request(request)
-
-            # User has a valid JWT from SciAuth
-            if jwt_payload is not None:
-
-                # Get the email
-                email = jwt_payload.get('email')
-
-                # Check claims in the JWT first, as it is least costly.
-                if authz.jwt_has_authz(jwt_payload, authz.JWT_AUTHZ_ROLES, role):
-                    return view(request, *args, **kwargs)
-
-                # Possibly store these elsewhere for records
-                # TODO: Figure out a better way to flag failed access attempts
-                logger.warning('{} Failed {} role check on {}'.format(email, role, dbmi_conf('CLIENT')))
-
-                # Forbid if nothing else
-                raise PermissionDenied
-
-            else:
-                logger.debug('Missing/invalid JWT, sending to login')
+            # Validate request
+            token, payload = _token_auth(request)
+            if not token:
                 return authn.logout_redirect(request)
+
+            # Check if we are using model auth
+            if dbmi_conf('USER_MODEL_ENABLED') and not _model_auth(request, token):
+                logger.debug('JWT checked out but user could not be created/fetched from model')
+                return authn.logout_redirect(request)
+
+            # Check claims in the JWT first, as it is least costly.
+            if authz.jwt_has_authz(payload, authz.JWT_AUTHZ_ROLES, role):
+                return view(request, *args, **kwargs)
+
+            # Possibly store these elsewhere for records
+            # TODO: Figure out a better way to flag failed access attempts
+            logger.warning('{} Failed {} group on {}'.format(payload.get('email'), role, dbmi_conf('CLIENT')))
+
+            # Forbid if nothing else
+            raise PermissionDenied
 
         wrap.__doc__ = view.__doc__
         wrap.__name__ = view.__name__
@@ -211,65 +159,143 @@ def dbmi_role(role):
     return real_decorator
 
 
-def dbmi_user_and_auth(function):
+def dbmi_app_permission(permission):
     '''
-    Decorator to verify both the JWT as well as the session
-    of the current user in order to control access to the
-    given method or view. JWT email is also compared to the
-    Django user's email and must match. Redirects back to
-    authentication server if not all conditions are satisfied.
-    :param function: The protected method
-    :return: decorator
+    Decorator that accepts an item string that is used to retrieve
+    permissions from SciAuthZ.
+    :param permission: The permission
+    :type permission: str
+    :return: function
     '''
-    def wrap(request, *args, **kwargs):
 
-        # Get the token
-        token = authn.get_jwt(request)
-        if not token:
-            return authn.logout_redirect(request)
+    def real_decorator(view):
 
-        # Check JWT and session
-        payload = authn.validate_rs256_jwt(token)
-        if request.user.is_authenticated() and payload is not None:
+        def wrap(request, *args, **kwargs):
 
-            # Ensure the email matches (without case sensitivity)
-            if request.user.username.lower() != payload['email'].lower():
-                logger.warning('Django and JWT email mismatch! Log them out and redirect to log back in')
-                django_logout(request)
+            # Validate request
+            token, payload = _token_auth(request)
+            if not token:
                 return authn.logout_redirect(request)
 
-            return function(request, *args, **kwargs)
-
-        # User has a JWT session open but not a Django session. Start a Django session and continue the request.
-        elif not request.user.is_authenticated() and payload is not None:
-
-            # Log the user in through Django's auth system
-            request.session['profile'] = payload
-            user = django_auth.authenticate(**payload)
-            if user:
-                django_login(request, user)
-            else:
-                logger.warning("Could not log user in: {}".format(authn.get_jwt_email(request, verify=False)))
-
-            # Check authentication
-            if request.user.is_authenticated():
-                return function(request, *args, **kwargs)
-
-            # Bail and send them back to login
-            else:
-                django_logout(request)
+            # Check if we are using model auth
+            if dbmi_conf('USER_MODEL_ENABLED') and not _model_auth(request, token):
+                logger.debug('JWT checked out but user could not be created/fetched from model')
                 return authn.logout_redirect(request)
 
-        elif payload is None and request.user.is_authenticated():
+            # Check claims in the JWT first, as it is least costly.
+            if authz.jwt_has_authz(payload, authz.JWT_AUTHZ_PERMISSIONS, permission):
+                return view(request, *args, **kwargs)
 
-            # The user's session exists with django but their JWT has expired, log them out and
-            # send them back to login
-            django_logout(request)
-            return authn.logout_redirect(request)
+            # Get their email address
+            email = authn.get_jwt_email(request, verify=False)
 
-        else:
-            return authn.logout_redirect(request)
+            # Check permission on the app
+            if authz.has_permission(request, email, dbmi_conf('CLIENT'), permission):
+                return view(request, *args, **kwargs)
 
-    wrap.__doc__ = function.__doc__
-    wrap.__name__ = function.__name__
-    return wrap
+            # Possibly store these elsewhere for records
+            # TODO: Figure out a better way to flag failed access attempts
+            logger.warning('{} Failed {} permission on {}'.format(email, permission, dbmi_conf('CLIENT')))
+
+            # Forbid if nothing else
+            raise PermissionDenied
+
+        wrap.__doc__ = view.__doc__
+        wrap.__name__ = view.__name__
+        return wrap
+
+    return real_decorator
+
+
+def dbmi_item_permission(item, permission):
+    '''
+    Decorator that accepts an item string that is checked for the passed permission. Item is an arbitrary
+    string the application uses internally for specific or object-level permissions.
+    :param item: The item
+    :type item: str
+    :param permission: The permission
+    :type permission: str
+    :return: function
+    '''
+
+    def real_decorator(view):
+
+        def wrap(request, *args, **kwargs):
+
+            # Validate request
+            token, payload = _token_auth(request)
+            if not token:
+                return authn.logout_redirect(request)
+
+            # Check if we are using model auth
+            if dbmi_conf('USER_MODEL_ENABLED') and not _model_auth(request, token):
+                logger.debug('JWT checked out but user could not be created/fetched from model')
+                return authn.logout_redirect(request)
+
+            # Get their email address
+            email = authn.get_jwt_email(request, verify=False)
+
+            # Check permission
+            if authz.has_permission(request, email, item, permission):
+                return view(request, *args, **kwargs)
+
+            # Possibly store these elsewhere for records
+            # TODO: Figure out a better way to flag failed access attempts
+            logger.warning('{} Failed {} permission on {}'.format(email, permission, dbmi_conf('CLIENT')))
+
+            # Forbid if nothing else
+            raise PermissionDenied
+
+        wrap.__doc__ = view.__doc__
+        wrap.__name__ = view.__name__
+        return wrap
+
+    return real_decorator
+
+
+def _token_auth(request):
+    """
+    Accepts the request and checks for a valid JWT. If it exists, the payload is returned
+    :param request: The incoming request
+    :return: The JWT payload dict
+    """
+    # Get the token
+    token = authn.get_jwt(request)
+    if not token:
+        return None, None
+
+    # Validate request
+    payload = authn.validate_rs256_jwt(token)
+    if not payload:
+        return None, None
+
+    return token, payload
+
+
+def _model_auth(request, token):
+    """
+    Accepts the request and the JWT and ensures the User model is brought into the mix
+    and the user instance properly authenticated and attached to the request.
+    :param request: The incoming request
+    :param token: The verified JWT
+    :return: Whether the model authenticated succeeded or not
+    """
+    # Check if already authenticated
+    if request.user.is_authenticated():
+        return True
+
+    # Clear user
+    request.user = None
+
+    # Log the user in through Django's auth system
+    user = django_auth.authenticate(request=request, token=token)
+    if user:
+
+        # Log them in
+        authn.login(request, user)
+        return True
+
+    else:
+        logger.warning("Could not log user in: {}".format(authn.get_jwt_email(request, verify=False)))
+
+    return False

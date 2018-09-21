@@ -30,21 +30,32 @@ DBMI_ENVIRONMENTS = {
 CONFIG_DEFAULTS = {
     # Client options, assume production environment
     'ENVIRONMENT': 'prod',
+    'ENABLE_LOGGING': True,
+
+    # Universal login screen branding
+    'AUTHN_TITLE': 'DBMI Client',
+    'AUTHN_ICON_URL': 'https://authentication.dbmi.hms.harvard.edu/static/hms_shield.png',
+
+    # AuthZ groups/roles/permissions
     'AUTHZ_ADMIN_GROUP': 'dbmi-admin',
+    'AUTHZ_ADMIN_PERMISSION': 'MANAGE',
     'AUTHZ_USER_GROUP': 'dbmi-user',
+
+    # JWT bits
     'JWT_HTTP_PREFIX': 'JWT ',
     'JWT_COOKIE_NAME': 'DBMI_JWT',
     'JWT_COOKIE_DOMAIN': '.dbmi.hms.harvard.edu',
-    'ENABLE_LOGGING': True,
-    'AUTH0': {
-        'CLIENT_IDS': ['!!! must be configured by client !!!'],
-        'DOMAIN': 'dbmiauth.auth0.com',
-    },
-    'AUTHN_BRANDING': {
-        'TITLE': 'DBMI Client',
-        'ICON_URL': 'https://authentication.dbmi.hms.harvard.edu/static/hms_shield.png',
-    },
-    'USE_DJANGO_AUTH': False,
+
+    # Auth0 account details
+    'AUTH0_CLIENT_IDS': ['!!! must be configured by client !!!'],
+    'AUTH0_DOMAIN': 'dbmiauth.auth0.com',
+
+    # Configurations surrounding usage of a local Django user model
+    'USER_MODEL_ENABLED': False,
+    'USER_MODEL_AUTOCREATE': True,
+
+    # These configurations are specific to DRF related auth/permissions
+    'DRF_OBJECT_OWNER_KEY': 'user',
 }
 
 CLIENT_CONFIG = getattr(settings, 'DBMI_CLIENT_CONFIG', {})
@@ -52,14 +63,8 @@ CLIENT_CONFIG = getattr(settings, 'DBMI_CLIENT_CONFIG', {})
 if 'CLIENT' not in CLIENT_CONFIG:
     raise AttributeError('CLIENT configuration must be set')
 
-if 'AUTH0' not in CLIENT_CONFIG:
-    raise AttributeError('AUTH0 configuration must be set')
-
-if 'CLIENT_IDS' not in CLIENT_CONFIG['AUTH0']:
-    raise AttributeError('AUTH0.CLIENT_IDS configuration must be set')
-
-if 'DOMAIN' not in CLIENT_CONFIG['AUTH0']:
-    raise AttributeError('AUTH0.DOMAIN configuration must be set')
+if 'AUTH0_DOMAIN' not in CLIENT_CONFIG or 'AUTH0_CLIENT_IDS' not in CLIENT_CONFIG:
+    raise AttributeError('AUTH0_DOMAIN and AUTH0_CLIENT_IDS configurations must be set')
 
 # Ensure environment is set and if not prod or dev, ensure service URLs are provided
 if 'ENVIRONMENT' in CLIENT_CONFIG and \
@@ -100,10 +105,10 @@ CONFIG = CONFIG_DEFAULTS.copy()
 CONFIG.update(CLIENT_CONFIG)
 
 # Do some configs
-if CONFIG['USE_DJANGO_AUTH']:
+if CONFIG['USER_MODEL_ENABLED']:
 
     # Set the backend
-    backends = ['dbmi_client.authn.DBMIAuthenticationBackend']
+    backends = ['dbmi_client.authn.DBMIModelAuthenticationBackend']
     backends.extend(settings.AUTHENTICATION_BACKENDS)
     settings.AUTHENTICATION_BACKENDS = backends
 
