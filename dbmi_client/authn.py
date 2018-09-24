@@ -483,7 +483,7 @@ class DBMIModelAuthenticationBackend(ModelBackend):
 ###################################################################
 
 
-class DBMIJWTUser(BaseAuthentication):
+class DBMIUser(BaseAuthentication):
     """
     Authentication method for DBMI API methods
     """
