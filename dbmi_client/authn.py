@@ -26,6 +26,63 @@ logger = get_logger()
 CACHED_JWKS_KEY = '__DBMI_CLIENT_CACHED_JWKS__'
 
 
+def login_redirect_url(request, next_url=None):
+    """
+    Builds and returns a URL that sends the user to the login, and returns them to the
+    supplied URL when successfully logged in. If next_url is not passed, the current URL in the
+    request will be used, so the user will return to the original location.
+    :param request: The original request object
+    :param next_url: The URL users will be sent after login
+    :return: Response
+    """
+
+    # Build the URL
+    login_url = furl(dbmi_conf('AUTHN_URL'))
+    login_url.path.segments.extend(['login', 'auth'])
+
+    # Check for the next URL
+    if next_url:
+        login_url.query.params.add('next', next_url)
+
+    else:
+        login_url.query.params.add('next', request.build_absolute_uri())
+
+    # Check for branding
+    if dbmi_conf('AUTHN_TITLE') or dbmi_conf('AUTHN_ICON_URL'):
+
+        # Add the included parameters
+        branding = {}
+        if dbmi_conf('AUTHN_TITLE'):
+            branding['title'] = dbmi_conf('AUTHN_TITLE')
+
+        if dbmi_conf('AUTHN_TITLE'):
+            branding['icon_url'] = dbmi_conf('AUTHN_ICON_URL')
+
+        # Encode it and pass it along
+        branding_param = base64.urlsafe_b64encode(json.dumps(branding).encode('utf-8')).decode('utf-8')
+        login_url.query.params.add('branding', branding_param)
+
+    return login_url.url
+
+
+def logout_redirect(request):
+    """
+    This will log a user out and redirect them to log in again via the AuthN server.
+    :param request:
+    :return: The response object that takes the user to the login page. 'next' parameter set to bring them back to their intended page.
+    """
+    # Ensure the request is cleared of user state
+    logout(request)
+
+    # Get a login response
+    response = redirect(login_redirect_url(request))
+
+    # Set the URL and purge cookies
+    response.delete_cookie(dbmi_conf('JWT_COOKIE_NAME'), domain=dbmi_conf('JWT_COOKIE_DOMAIN'))
+
+    return response
+
+
 def dbmi_http_headers(request, content_type='application/json', **kwargs):
     """
     Returns headers to be used for API calls to DBMI services in order to authenticate the caller
@@ -274,43 +331,6 @@ def validate_rs256_jwt(jwt_string):
             logger.warning("Invalid JWT Token: {}".format(err))
 
     return None
-
-
-def logout_redirect(request):
-    """
-    This will log a user out and redirect them to log in again via the AuthN server.
-    :param request:
-    :return: The response object that takes the user to the login page. 'next' parameter set to bring them back to their intended page.
-    """
-
-    # Build the URL
-    login_url = furl(dbmi_conf('AUTHN_URL'))
-    login_url.path.segments.extend(['login', 'auth'])
-    login_url.query.params.add('next', request.build_absolute_uri())
-
-    # Check for branding
-    if dbmi_conf('AUTHN_TITLE') or dbmi_conf('AUTHN_ICON_URL'):
-
-        # Add the included parameters
-        branding = {}
-        if dbmi_conf('AUTHN_TITLE'):
-            branding['title'] = dbmi_conf('AUTHN_TITLE')
-
-        if dbmi_conf('AUTHN_TITLE'):
-            branding['icon_url'] = dbmi_conf('AUTHN_ICON_URL')
-
-        # Encode it and pass it along
-        branding_param = base64.urlsafe_b64encode(json.dumps(branding).encode('utf-8')).decode('utf-8')
-        login_url.query.params.add('branding', branding_param)
-
-    # Ensure the request is cleared of user state
-    logout(request)
-
-    # Set the URL and purge cookies
-    response = redirect(login_url.url)
-    response.delete_cookie(dbmi_conf('JWT_COOKIE_NAME'), domain=dbmi_conf('JWT_COOKIE_DOMAIN'))
-
-    return response
 
 ###################################################################
 #
