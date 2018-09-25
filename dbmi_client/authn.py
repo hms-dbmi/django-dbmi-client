@@ -13,6 +13,7 @@ from django.db.models import Q
 from django.core.exceptions import MultipleObjectsReturned
 from django.shortcuts import redirect
 from django.contrib.auth import logout
+from django.contrib.auth import authenticate as django_authenticate
 from rest_framework.authentication import BaseAuthentication
 from rest_framework import exceptions
 
@@ -187,7 +188,7 @@ def get_public_keys_from_auth0(refresh=False):
             logger.debug('Fetching remote JWKS')
 
             # Build the JWKs URL
-            url = furl().set(scheme='https', host=dbmi_conf('AUTH0_DOMAIN'))
+            url = furl().set(scheme='https', host='{}.auth0.com'.format(dbmi_conf('AUTH0_TENANT')))
             url.path.segments.extend(['.well-known', 'jwks.json'])
 
             # Make the request
@@ -515,8 +516,9 @@ class DBMIModelUser(BaseAuthentication):
         if not token:
             raise exceptions.NotAuthenticated
 
-        # Get the user
-        user = DBMIModelAuthenticationBackend.authenticate(request, token)
+        # Call the standard Django authenticate method, that will in
+        # turn call DBMIModelAuthenticationBackend.authenticate
+        user = django_authenticate(request, token=token)
         if not user:
             raise exceptions.AuthenticationFailed
 

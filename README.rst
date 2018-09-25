@@ -24,15 +24,12 @@ Quick start
         'CLIENT': 'my-client', # This string is used to identify your app in DBMI services
         'ENVIRONMENT': 'prod|dev', # The environment setting determines the URLs of DBMI services to use
         'AUTHZ_ADMIN_GROUP': 'my-client-admin', # This optional setting will give admin permissions to users with this group
+        'AUTHZ_ADMIN_PERMISSION: 'admin', # This optional setting will grant a user staff/superuser status if this permissions exists for them
         'JWT_COOKIE_DOMAIN': '.my-client.hms.harvard.edu', # This setting must be a subdomain of your app's public domain
-        'AUTH0': {
-            'CLIENT_IDS': ['xxxxxxxxxxxxxxx,yyyyyyyyyyyyyyyy'], # A list of Auth0 clients to authenticate for
-            'DOMAIN': 'my-client.auth0.com, # The Auth0 domain that your Auth0 client is hosted in
-        },
-        'AUTHN_BRANDING': {
-            'TITLE': 'My Client', # A title of your app to be shown on the login screen
-            'ICON_URL': 'https://authentication.hms.harvard.edu/static/hms_shield.png', # A square image to be shown on the login screen
-        },
+        'AUTH0_CLIENT_IDS': ['xxxxxxxxxxxxxxx,yyyyyyyyyyyyyyyy'], # A list of Auth0 clients to authenticate for
+        'AUTH0_TENANT': 'my-client, # The Auth0 tenant identifier that your Auth0 client is registered in
+        'AUTHN_TITLE': 'My Client', # A title of your app to be shown on the login screen
+        'AUTHN_ICON_URL': 'https://authentication.hms.harvard.edu/static/hms_shield.png', # A square image to be shown on the login screen
     }
 
 3. If running a local or test environment, configurations might look as follows::
@@ -50,15 +47,12 @@ Quick start
         'REG_URL': 'http://dbmireg:8005', # Must be resolvable from other services
         'JWT_AUTHZ_NAMESPACE': 'http://local.authorization.dbmi.hms.harvard.edu',
         'AUTHZ_ADMIN_GROUP': 'my-client-admin', # This optional setting will give admin permissions to users with this group
+        'AUTHZ_ADMIN_PERMISSION: 'admin', # This optional setting will grant a user staff/superuser status if this permissions exists for them
         'JWT_COOKIE_DOMAIN': '.my-client.hms.harvard.edu', # This setting must be a subdomain of your app's public domain
-        'AUTH0': {
-            'CLIENT_IDS': ['xxxxxxxxxxxxxxx,yyyyyyyyyyyyyyyy'], # A list of Auth0 clients to authenticate for
-            'DOMAIN': 'my-client.auth0.com, # The Auth0 domain that your Auth0 client is hosted in
-        },
-        'AUTHN_BRANDING': {
-            'TITLE': 'My Client', # A title of your app to be shown on the login screen
-            'ICON_URL': 'https://authentication.hms.harvard.edu/static/hms_shield.png', # A square image to be shown on the login screen
-        },
+        'AUTH0_CLIENT_IDS': ['xxxxxxxxxxxxxxx,yyyyyyyyyyyyyyyy'], # A list of Auth0 clients to authenticate for
+        'AUTH0_TENANT': 'my-client, # The Auth0 tenant identifier that your Auth0 client is registered in
+        'AUTHN_TITLE': 'My Client', # A title of your app to be shown on the login screen
+        'AUTHN_ICON_URL': 'https://authentication.hms.harvard.edu/static/hms_shield.png', # A square image to be shown on the login screen
     }
 
 4. When a user visits your site, a decorated view will automatically send them to the login service if they have not yet authenticated. To limit a Django view to authenticated users::

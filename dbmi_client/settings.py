@@ -48,7 +48,7 @@ CONFIG_DEFAULTS = {
 
     # Auth0 account details
     'AUTH0_CLIENT_IDS': ['!!! must be configured by client !!!'],
-    'AUTH0_DOMAIN': 'dbmiauth.auth0.com',
+    'AUTH0_TENANT': 'dbmiauth',
 
     # Configurations surrounding usage of a local Django user model
     'USER_MODEL_ENABLED': False,
@@ -63,8 +63,8 @@ CLIENT_CONFIG = getattr(settings, 'DBMI_CLIENT_CONFIG', {})
 if 'CLIENT' not in CLIENT_CONFIG:
     raise AttributeError('CLIENT configuration must be set')
 
-if 'AUTH0_DOMAIN' not in CLIENT_CONFIG or 'AUTH0_CLIENT_IDS' not in CLIENT_CONFIG:
-    raise AttributeError('AUTH0_DOMAIN and AUTH0_CLIENT_IDS configurations must be set')
+if 'AUTH0_TENANT' not in CLIENT_CONFIG or 'AUTH0_CLIENT_IDS' not in CLIENT_CONFIG:
+    raise AttributeError('AUTH0_TENANT and AUTH0_CLIENT_IDS configurations must be set')
 
 # Ensure environment is set and if not prod or dev, ensure service URLs are provided
 if 'ENVIRONMENT' in CLIENT_CONFIG and \
