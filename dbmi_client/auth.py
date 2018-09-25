@@ -1,12 +1,12 @@
 from django.core.exceptions import PermissionDenied
 from django.contrib import auth as django_auth
 
-from dbmi_client.settings import dbmi_conf
+from dbmi_client.settings import dbmi_settings
 from dbmi_client import authn
 from dbmi_client import authz
 
-from dbmi_client.settings import get_logger
-logger = get_logger()
+# Get the app logger
+logger = dbmi_settings.get_logger()
 
 
 def dbmi_user(view):
@@ -25,7 +25,7 @@ def dbmi_user(view):
             return authn.logout_redirect(request)
 
         # Check if we are using model auth
-        if dbmi_conf('USER_MODEL_ENABLED') and not _model_auth(request, token):
+        if dbmi_settings.USER_MODEL_ENABLED and not _model_auth(request, token):
             logger.debug('JWT checked out but user could not be created/fetched from model')
             return authn.logout_redirect(request)
 
@@ -51,26 +51,26 @@ def dbmi_admin(view):
             return authn.logout_redirect(request)
 
         # Check if we are using model auth
-        if dbmi_conf('USER_MODEL_ENABLED') and not _model_auth(request, token):
+        if dbmi_settings.USER_MODEL_ENABLED and not _model_auth(request, token):
             logger.debug('JWT checked out but user could not be created/fetched from model')
             return authn.logout_redirect(request)
 
         # Check claims in the JWT first, as it is least costly.
-        if authz.jwt_has_authz(payload, authz.JWT_AUTHZ_GROUPS, dbmi_conf('AUTHZ_ADMIN_GROUP')):
+        if authz.jwt_has_authz(payload, authz.JWT_AUTHZ_GROUPS, dbmi_settings.AUTHZ_ADMIN_GROUP):
             return view(request, *args, **kwargs)
 
         # Get their email address
         email = authn.get_jwt_email(request, verify=False)
 
         # Now consult the AuthZ server
-        if authz.has_permission(request, email, dbmi_conf('CLIENT'), dbmi_conf('AUTHZ_ADMIN_PERMISSION')):
+        if authz.has_permission(request, email, dbmi_settings.CLIENT, dbmi_settings.AUTHZ_ADMIN_PERMISSION):
             return view(request, *args, **kwargs)
 
         # Possibly store these elsewhere for records
         # TODO: Figure out a better way to flag failed access attempts
         logger.warning('{} Failed {} permission on {}'.format(email,
-                                                              dbmi_conf('AUTHZ_ADMIN_PERMISSION'),
-                                                              dbmi_conf('CLIENT')))
+                                                              dbmi_settings.AUTHZ_ADMIN_PERMISSION,
+                                                              dbmi_settings.CLIENT))
 
         raise PermissionDenied
 
@@ -96,7 +96,7 @@ def dbmi_group(group):
                 return authn.logout_redirect(request)
 
             # Check if we are using model auth
-            if dbmi_conf('USER_MODEL_ENABLED') and not _model_auth(request, token):
+            if dbmi_settings.USER_MODEL_ENABLED and not _model_auth(request, token):
                 logger.debug('JWT checked out but user could not be created/fetched from model')
                 return authn.logout_redirect(request)
 
@@ -106,7 +106,7 @@ def dbmi_group(group):
 
             # Possibly store these elsewhere for records
             # TODO: Figure out a better way to flag failed access attempts
-            logger.warning('{} Failed {} group on {}'.format(payload.get('email'), group, dbmi_conf('CLIENT')))
+            logger.warning('{} Failed {} group on {}'.format(payload.get('email'), group, dbmi_settings.CLIENT))
 
             # Forbid if nothing else
             raise PermissionDenied
@@ -137,7 +137,7 @@ def dbmi_role(role):
                 return authn.logout_redirect(request)
 
             # Check if we are using model auth
-            if dbmi_conf('USER_MODEL_ENABLED') and not _model_auth(request, token):
+            if dbmi_settings.USER_MODEL_ENABLED and not _model_auth(request, token):
                 logger.debug('JWT checked out but user could not be created/fetched from model')
                 return authn.logout_redirect(request)
 
@@ -147,7 +147,7 @@ def dbmi_role(role):
 
             # Possibly store these elsewhere for records
             # TODO: Figure out a better way to flag failed access attempts
-            logger.warning('{} Failed {} group on {}'.format(payload.get('email'), role, dbmi_conf('CLIENT')))
+            logger.warning('{} Failed {} group on {}'.format(payload.get('email'), role, dbmi_settings.CLIENT))
 
             # Forbid if nothing else
             raise PermissionDenied
@@ -178,7 +178,7 @@ def dbmi_app_permission(permission):
                 return authn.logout_redirect(request)
 
             # Check if we are using model auth
-            if dbmi_conf('USER_MODEL_ENABLED') and not _model_auth(request, token):
+            if dbmi_settings.USER_MODEL_ENABLED and not _model_auth(request, token):
                 logger.debug('JWT checked out but user could not be created/fetched from model')
                 return authn.logout_redirect(request)
 
@@ -190,12 +190,12 @@ def dbmi_app_permission(permission):
             email = authn.get_jwt_email(request, verify=False)
 
             # Check permission on the app
-            if authz.has_permission(request, email, dbmi_conf('CLIENT'), permission):
+            if authz.has_permission(request, email, dbmi_settings.CLIENT, permission):
                 return view(request, *args, **kwargs)
 
             # Possibly store these elsewhere for records
             # TODO: Figure out a better way to flag failed access attempts
-            logger.warning('{} Failed {} permission on {}'.format(email, permission, dbmi_conf('CLIENT')))
+            logger.warning('{} Failed {} permission on {}'.format(email, permission, dbmi_settings.CLIENT))
 
             # Forbid if nothing else
             raise PermissionDenied
@@ -228,7 +228,7 @@ def dbmi_item_permission(item, permission):
                 return authn.logout_redirect(request)
 
             # Check if we are using model auth
-            if dbmi_conf('USER_MODEL_ENABLED') and not _model_auth(request, token):
+            if dbmi_settings.USER_MODEL_ENABLED and not _model_auth(request, token):
                 logger.debug('JWT checked out but user could not be created/fetched from model')
                 return authn.logout_redirect(request)
 
@@ -241,7 +241,7 @@ def dbmi_item_permission(item, permission):
 
             # Possibly store these elsewhere for records
             # TODO: Figure out a better way to flag failed access attempts
-            logger.warning('{} Failed {} permission on {}'.format(email, permission, dbmi_conf('CLIENT')))
+            logger.warning('{} Failed {} permission on {}'.format(email, permission, dbmi_settings.CLIENT))
 
             # Forbid if nothing else
             raise PermissionDenied

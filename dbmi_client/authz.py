@@ -4,11 +4,11 @@ import requests
 from rest_framework.permissions import BasePermission
 from rest_framework.exceptions import PermissionDenied, NotAuthenticated
 
-from dbmi_client.settings import dbmi_conf
+from dbmi_client.settings import dbmi_settings
 from dbmi_client import authn
 
-from dbmi_client.settings import get_logger
-logger = get_logger()
+# Get the app logger
+logger = dbmi_settings.get_logger()
 
 # Set keys for authz dictionary
 JWT_AUTHZ_GROUPS = 'groups'
@@ -31,7 +31,7 @@ def jwt_has_authz(claims, auth_type, item):
     """
     try:
         # Call the other method with the authz claims object
-        auth = claims[dbmi_conf('JWT_AUTHZ_NAMESPACE')]
+        auth = claims[dbmi_settings.JWT_AUTHZ_NAMESPACE]
         return auth_has_authz(auth, auth_type, item)
 
     except (KeyError, IndexError, TypeError, ValueError):
@@ -82,11 +82,11 @@ def has_permission(request, email, item, permission):
     content = None
     try:
         # Build the request
-        url = furl(dbmi_conf('AUTHZ_URL'))
+        url = furl(dbmi_settings.AUTHZ_URL)
         url.path.segments.append('user_permission')
         url.query.params.add('email', email)
         url.query.params.add('item', item)
-        url.query.params.add('client', dbmi_conf('CLIENT'))
+        url.query.params.add('client', dbmi_settings.CLIENT)
 
         # Get the JWT token depending on request type
         token = authn.get_jwt(request)
@@ -94,7 +94,7 @@ def has_permission(request, email, item, permission):
             return False
 
         # Build headers for the SciAuthZ call
-        headers = {'Authorization': '{}{}'.format(dbmi_conf('JWT_HTTP_PREFIX'), token),
+        headers = {'Authorization': '{}{}'.format(dbmi_settings.JWT_HTTP_PREFIX, token),
                    'Content-Type': 'application/json'}
 
         # Run it
@@ -105,7 +105,7 @@ def has_permission(request, email, item, permission):
         # Parse permissions
         for permission_result in response.json().get('results'):
             if permission_result['permission'].lower() == permission.lower():
-                logger.debug('DBMIAuthZ: {} has {} on {}'.format(email, permission, dbmi_conf('CLIENT')))
+                logger.debug('DBMIAuthZ: {} has {} on {}'.format(email, permission, dbmi_settings.CLIENT))
                 return True
 
     except (requests.HTTPError, TypeError, KeyError):
@@ -136,11 +136,11 @@ class DBMIAdminPermission(BasePermission):
 
         # Ensure claims are setup and then check them first, as it is least costly.
         if request.auth:
-            if auth_has_authz(request.auth, JWT_AUTHZ_GROUPS, dbmi_conf('AUTHZ_ADMIN_GROUP')):
+            if auth_has_authz(request.auth, JWT_AUTHZ_GROUPS, dbmi_settings.AUTHZ_ADMIN_GROUP):
                 return True
 
         # Check permissions
-        if has_permission(request, request.user, dbmi_conf('CLIENT'), dbmi_conf('AUTHZ_ADMIN_PERMISSION')):
+        if has_permission(request, request.user, dbmi_settings.CLIENT, dbmi_settings.AUTHZ_ADMIN_PERMISSION):
             return True
 
         # Possibly store these elsewhere for records
@@ -190,7 +190,7 @@ class DBMIOwnerPermission(BasePermission):
             raise NotAuthenticated
 
         # Check if a key has been specified
-        key = dbmi_conf('DRF_OBJECT_OWNER_KEY')
+        key = dbmi_settings.DRF_OBJECT_OWNER_KEY
         if key:
 
             # Ensure the attribute exists
@@ -233,11 +233,11 @@ class DBMIAdminOrOwnerPermission(DBMIOwnerPermission):
 
         # Ensure claims are setup and then check them first, as it is least costly.
         if request.auth:
-            if auth_has_authz(request.auth, JWT_AUTHZ_PERMISSIONS, dbmi_conf('AUTHZ_ADMIN_PERMISSION')):
+            if auth_has_authz(request.auth, JWT_AUTHZ_PERMISSIONS, dbmi_settings.AUTHZ_ADMIN_PERMISSION):
                 return True
 
         # Lastly, check permission server for admin permissions
-        if has_permission(request, request.user, dbmi_conf('CLIENT'), dbmi_conf('AUTHZ_ADMIN_PERMISSION')):
+        if has_permission(request, request.user, dbmi_settings.CLIENT, dbmi_settings.AUTHZ_ADMIN_PERMISSION):
             return True
 
         # Possibly store these elsewhere for records

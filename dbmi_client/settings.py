@@ -4,6 +4,7 @@ import warnings
 import logging
 
 from django.conf import settings
+from django.test.signals import setting_changed
 
 # Always import this module as follows:
 # from dbmi_client import settings [as dbmi_settings]
@@ -30,6 +31,14 @@ DBMI_ENVIRONMENTS = {
 CONFIG_DEFAULTS = {
     # Client options, assume production environment
     'ENVIRONMENT': 'prod',
+
+    # Set prod URLs
+    'AUTHN_URL': 'https://authentication.dbmi.hms.harvard.edu',
+    'AUTHZ_URL': 'https://authorization.dbmi.hms.harvard.edu',
+    'REG_URL': 'https://registration.dbmi.hms.harvard.edu',
+    'JWT_AUTHZ_NAMESPACE': 'https://authorization.dbmi.hms.harvard.edu',
+
+    # Optionally disable logging
     'ENABLE_LOGGING': True,
 
     # Universal login screen branding
@@ -58,82 +67,155 @@ CONFIG_DEFAULTS = {
     'DRF_OBJECT_OWNER_KEY': 'user',
 }
 
-CLIENT_CONFIG = getattr(settings, 'DBMI_CLIENT_CONFIG', {})
+# List of settings that cannot be defaulted and must be user-defined
+REQUIRED_SETTINGS = ('CLIENT', 'AUTH0_CLIENT_IDS', 'AUTH0_TENANT')
 
-if 'CLIENT' not in CLIENT_CONFIG:
-    raise AttributeError('CLIENT configuration must be set')
-
-if 'AUTH0_TENANT' not in CLIENT_CONFIG or 'AUTH0_CLIENT_IDS' not in CLIENT_CONFIG:
-    raise AttributeError('AUTH0_TENANT and AUTH0_CLIENT_IDS configurations must be set')
-
-# Ensure environment is set and if not prod or dev, ensure service URLs are provided
-if 'ENVIRONMENT' in CLIENT_CONFIG and \
-        CLIENT_CONFIG['ENVIRONMENT'].lower() != 'prod' and CLIENT_CONFIG['ENVIRONMENT'].lower() != 'dev':
-    warnings.warn(
-        "ENVIRONMENT is not set to production, this should be a test environment", ResourceWarning)
-
-    missing_urls = []
-    if 'AUTHN_URL' not in CLIENT_CONFIG:
-        missing_urls.append('AUTHN_URL')
-    if 'AUTHZ_URL' not in CLIENT_CONFIG:
-        missing_urls.append('AUTHZ_URL')
-    if 'REG_URL' not in CLIENT_CONFIG:
-        missing_urls.append('REG_URL')
-    if missing_urls:
-        raise AttributeError('{} configuration(s) must be set'.format(missing_urls))
-
-    if 'JWT_AUTHZ_NAMESPACE' not in CLIENT_CONFIG:
-        warnings.warn(
-            "JWT_AUTHZ_NAMESPACE is not set, JWT claims will not be inspected "
-            "for groups/roles/permissions", ResourceWarning)
-
-else:
-
-    # Update the client config with pre-defined environment URLs, etc
-    CLIENT_CONFIG.update(DBMI_ENVIRONMENTS[CLIENT_CONFIG['ENVIRONMENT']])
-
-if 'JWT_HTTP_PREFIX' in CLIENT_CONFIG:
-    warnings.warn(
-        "Changing JWT_HTTP_PREFIX breaks compatibility with DBMI services", ResourceWarning)
-
-if 'JWT_COOKIE_NAME' in CLIENT_CONFIG:
-    warnings.warn(
-        "Changing JWT_COOKIE_NAME breaks compatibility with DBMI services", ResourceWarning)
-
-# Merge client and default configurations
-CONFIG = CONFIG_DEFAULTS.copy()
-CONFIG.update(CLIENT_CONFIG)
-
-# Do some configs
-if CONFIG['USER_MODEL_ENABLED']:
-
-    # Set the backend
-    backends = ['dbmi_client.authn.DBMIModelAuthenticationBackend']
-    backends.extend(settings.AUTHENTICATION_BACKENDS)
-    settings.AUTHENTICATION_BACKENDS = backends
+# List of settings that have been removed
+REMOVED_SETTINGS = ()
 
 
-def get_logger():
+class DBMISettings(object):
     """
-    Returns the logger and manages whether logs propogate or not depending on user configs
-    :return: logger
+    A settings object, that allows DBMI Client settings to be accessed as properties.
+    For example:
+        from dbmi_client.settings import dbmi_settings
+        print(dbmi_settings.AUTHZ_ADMIN_GROUP)
+    Any setting with string import paths will be automatically resolved
+    and return the class, rather than the string literal.
     """
-    logger = logging.getLogger(__name__)
+    def __init__(self, user_settings=None, defaults=None):
+        if user_settings:
+            self._user_settings = self.__check_user_settings(user_settings)
+        self.defaults = defaults or CONFIG_DEFAULTS
+        self._cached_attrs = set()
 
-    # Check if disabled
-    if not dbmi_conf('ENABLE_LOGGING'):
-        logger.propagate = False
+    @property
+    def user_settings(self):
 
-    return logger
+        # Check to see if user conigs have been loaded or not
+        if not hasattr(self, '_user_settings'):
+
+            # Load user-specified configurations
+            user_settings = getattr(settings, 'DBMI_CLIENT_CONFIG', {})
+
+            # Update the client config with pre-defined environment URLs, etc
+            if user_settings['ENVIRONMENT'] in DBMI_ENVIRONMENTS:
+                user_settings.update(DBMI_ENVIRONMENTS[user_settings['ENVIRONMENT']])
+
+            # Check them
+            self._user_settings = self.__check_user_settings(user_settings)
+
+        return self._user_settings
+
+    def __getattr__(self, attr):
+
+        # Any attribute must be in either required settings or defaults
+        if attr not in REQUIRED_SETTINGS and attr not in self.defaults:
+            raise AttributeError("Invalid DBMI setting: '%s'" % attr)
+
+        try:
+            # Check if present in user settings
+            val = self.user_settings[attr]
+        except KeyError:
+
+            # Fall back to defaults
+            val = self.defaults[attr]
+
+        # Cache the result
+        self._cached_attrs.add(attr)
+        setattr(self, attr, val)
+
+        return val
+
+    def __check_user_settings(self, user_settings):
+        SETTINGS_DOC = 'https://github.com/hms-dbmi/django-dbmi-client'
+
+        for setting in REMOVED_SETTINGS:
+            if setting in user_settings:
+                raise RuntimeError("The '%s' setting has been removed. Please refer to '%s' for available settings."
+                                   % (setting, SETTINGS_DOC))
+
+        if 'CLIENT' not in user_settings:
+            raise AttributeError('CLIENT configuration must be set')
+
+        if 'AUTH0_TENANT' not in user_settings or 'AUTH0_CLIENT_IDS' not in user_settings:
+            raise AttributeError('AUTH0_TENANT and AUTH0_CLIENT_IDS configurations must be set')
+
+        # Ensure environment is set and if not prod or dev, ensure service URLs are provided
+        if 'ENVIRONMENT' in user_settings and \
+                user_settings['ENVIRONMENT'].lower() != 'prod' and user_settings['ENVIRONMENT'].lower() != 'dev':
+            warnings.warn(
+                "ENVIRONMENT is not set to production, this should be a test environment", ResourceWarning)
+
+            missing_urls = []
+            if 'AUTHN_URL' not in user_settings:
+                missing_urls.append('AUTHN_URL')
+            if 'AUTHZ_URL' not in user_settings:
+                missing_urls.append('AUTHZ_URL')
+            if 'REG_URL' not in user_settings:
+                missing_urls.append('REG_URL')
+            if missing_urls:
+                raise AttributeError('{} configuration(s) must be set'.format(missing_urls))
+
+            if 'JWT_AUTHZ_NAMESPACE' not in user_settings:
+                warnings.warn(
+                    "JWT_AUTHZ_NAMESPACE is not set, JWT claims will not be inspected "
+                    "for groups/roles/permissions", ResourceWarning)
+
+        if 'JWT_HTTP_PREFIX' in user_settings:
+            warnings.warn(
+                "Changing JWT_HTTP_PREFIX breaks compatibility with DBMI services", ResourceWarning)
+
+        if 'JWT_COOKIE_NAME' in user_settings:
+            warnings.warn(
+                "Changing JWT_COOKIE_NAME breaks compatibility with DBMI services", ResourceWarning)
+
+        return user_settings
+
+    def reload(self):
+        for attr in self._cached_attrs:
+            delattr(self, attr)
+        self._cached_attrs.clear()
+        if hasattr(self, '_user_settings'):
+            delattr(self, '_user_settings')
+
+    def __dir__(self):
+
+        # Return defaults and user configs patched over
+        attrs = dict()
+        attrs.update(self.defaults)
+        attrs.update(self.user_settings)
+
+        return attrs.keys()
+
+    @property
+    def USER_MODEL_ENABLED(self):
+
+        # Return true if the client has added model auth to the backends setting
+        return 'dbmi_client.authn.DBMIModelAuthenticationBackend' in settings.AUTHENTICATION_BACKENDS
+
+    def get_logger(self):
+        """
+        Returns the logger and manages whether logs propogate or not depending on user configs
+        :return: logger
+        """
+        logger = logging.getLogger(__name__)
+
+        # Check if disabled
+        if not self.ENABLE_LOGGING:
+            logger.propagate = False
+
+        return logger
 
 
-def dbmi_conf(key):
-    """
-    Just returns the value for the given key
-    """
-    # Return the value
-    if key not in CONFIG:
-        warnings.warn("Configuration \'{}\' does not exist".format(key), ResourceWarning)
-        return None
+# Create the instance by which the settings should be accessed
+dbmi_settings = DBMISettings(None, CONFIG_DEFAULTS)
 
-    return CONFIG.get(key)
+
+def reload_dbmi_settings(*args, **kwargs):
+    setting = kwargs['setting']
+    if setting == 'DBMI_CLIENT_CONFIG':
+        dbmi_settings.reload()
+
+
+setting_changed.connect(reload_dbmi_settings)

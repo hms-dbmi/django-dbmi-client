@@ -5,7 +5,6 @@ import base64
 import requests
 import jwcrypto.jwk as jwk
 
-from django.conf import settings
 from django.core.exceptions import PermissionDenied
 from django.contrib.auth.backends import ModelBackend
 from django.contrib.auth.signals import user_logged_in, user_logged_out
@@ -18,11 +17,11 @@ from django.contrib.auth import authenticate as django_authenticate
 from rest_framework.authentication import BaseAuthentication
 from rest_framework import exceptions
 
-from dbmi_client.settings import dbmi_conf
+from dbmi_client.settings import dbmi_settings
 from dbmi_client import authz
 
-from dbmi_client.settings import get_logger
-logger = get_logger()
+# Get the app logger
+logger = dbmi_settings.get_logger()
 
 # Set a key to cache JWKs under in the DBMI.AUTH0 settings
 CACHED_JWKS_KEY = '__DBMI_CLIENT_CACHED_JWKS__'
@@ -39,7 +38,7 @@ def login_redirect_url(request, next_url=None):
     """
 
     # Build the URL
-    login_url = furl(dbmi_conf('AUTHN_URL'))
+    login_url = furl(dbmi_settings.AUTHN_URL)
     login_url.path.segments.extend(['login', 'auth'])
 
     # Check for the next URL
@@ -50,15 +49,15 @@ def login_redirect_url(request, next_url=None):
         login_url.query.params.add('next', request.build_absolute_uri())
 
     # Check for branding
-    if dbmi_conf('AUTHN_TITLE') or dbmi_conf('AUTHN_ICON_URL'):
+    if dbmi_settings.AUTHN_TITLE or dbmi_settings.AUTHN_ICON_URL:
 
         # Add the included parameters
         branding = {}
-        if dbmi_conf('AUTHN_TITLE'):
-            branding['title'] = dbmi_conf('AUTHN_TITLE')
+        if dbmi_settings.AUTHN_TITLE:
+            branding['title'] = dbmi_settings.AUTHN_TITLE
 
-        if dbmi_conf('AUTHN_TITLE'):
-            branding['icon_url'] = dbmi_conf('AUTHN_ICON_URL')
+        if dbmi_settings.AUTHN_TITLE:
+            branding['icon_url'] = dbmi_settings.AUTHN_ICON_URL
 
         # Encode it and pass it along
         branding_param = base64.urlsafe_b64encode(json.dumps(branding).encode('utf-8')).decode('utf-8')
@@ -80,7 +79,7 @@ def logout_redirect(request):
     response = redirect(login_redirect_url(request))
 
     # Set the URL and purge cookies
-    response.delete_cookie(dbmi_conf('JWT_COOKIE_NAME'), domain=dbmi_conf('JWT_COOKIE_DOMAIN'))
+    response.delete_cookie(dbmi_settings.JWT_COOKIE_NAME, domain=dbmi_settings.JWT_COOKIE_DOMAIN)
 
     return response
 
@@ -97,7 +96,7 @@ def dbmi_http_headers(request, content_type='application/json', **kwargs):
     token = get_jwt(request)
 
     # Return headers
-    headers = {'Authorization': '{}{}'.format(dbmi_conf('JWT_HTTP_PREFIX'), token), 'Content-Type': content_type}
+    headers = {'Authorization': '{}{}'.format(dbmi_settings.JWT_HTTP_PREFIX, token), 'Content-Type': content_type}
 
     # Add any additional parameters
     headers.update(kwargs)
@@ -112,15 +111,15 @@ def get_jwt(request):
     :return: The JWT, if found
     """
     # Get the JWT token depending on request type
-    if hasattr(request, 'COOKIES') and request.COOKIES.get(dbmi_conf('JWT_COOKIE_NAME')):
-        return request.COOKIES.get(dbmi_conf('JWT_COOKIE_NAME'))
+    if hasattr(request, 'COOKIES') and request.COOKIES.get(dbmi_settings.JWT_COOKIE_NAME):
+        return request.COOKIES.get(dbmi_settings.JWT_COOKIE_NAME)
 
     # Check if JWT in HTTP Authorization header
-    elif hasattr(request, 'META') and request.META.get('HTTP_AUTHORIZATION') and dbmi_conf('JWT_HTTP_PREFIX') \
+    elif hasattr(request, 'META') and request.META.get('HTTP_AUTHORIZATION') and dbmi_settings.JWT_HTTP_PREFIX \
             in request.META.get('HTTP_AUTHORIZATION'):
 
         # Remove prefix and return the token
-        return request.META.get('HTTP_AUTHORIZATION').replace(dbmi_conf('JWT_HTTP_PREFIX'), '')
+        return request.META.get('HTTP_AUTHORIZATION').replace(dbmi_settings.JWT_HTTP_PREFIX, '')
 
     return None
 
@@ -174,22 +173,22 @@ def get_public_keys_from_auth0(refresh=False):
 
     # If refresh, delete cached key
     if refresh:
-        delattr(settings, CACHED_JWKS_KEY)
+        delattr(dbmi_settings, CACHED_JWKS_KEY)
 
     try:
         # Look in settings
-        if hasattr(settings, CACHED_JWKS_KEY):
+        if hasattr(dbmi_settings, CACHED_JWKS_KEY):
             logger.debug('Using cached JWKS')
 
             # Parse the cached dict and return it
-            return json.loads(getattr(settings, CACHED_JWKS_KEY))
+            return json.loads(getattr(dbmi_settings, CACHED_JWKS_KEY))
 
         else:
 
             logger.debug('Fetching remote JWKS')
 
             # Build the JWKs URL
-            url = furl().set(scheme='https', host='{}.auth0.com'.format(dbmi_conf('AUTH0_TENANT')))
+            url = furl().set(scheme='https', host='{}.auth0.com'.format(dbmi_settings.AUTH0_TENANT))
             url.path.segments.extend(['.well-known', 'jwks.json'])
 
             # Make the request
@@ -200,7 +199,7 @@ def get_public_keys_from_auth0(refresh=False):
             jwks = response.json()
 
             # Cache it
-            setattr(settings, CACHED_JWKS_KEY, json.dumps(jwks))
+            setattr(dbmi_settings, CACHED_JWKS_KEY, json.dumps(jwks))
 
             return jwks
 
@@ -312,7 +311,7 @@ def validate_rs256_jwt(jwt_string):
             return None
 
         # Check that the Client ID is in the allowed list of Auth0 Client IDs for this application
-        if auth0_client_id not in dbmi_conf('AUTH0_CLIENT_IDS'):
+        if auth0_client_id not in dbmi_settings.AUTH0_CLIENT_IDS:
             logger.error('Auth0 Client ID not allowed')
             return None
 
@@ -421,7 +420,7 @@ class DBMIModelAuthenticationBackend(ModelBackend):
         except User.DoesNotExist:
 
             # Check if we should autocreate users
-            if dbmi_conf('USER_MODEL_AUTOCREATE'):
+            if dbmi_settings.USER_MODEL_AUTOCREATE:
 
                 # Create them
                 user = User(username=username, email=email)
@@ -463,11 +462,11 @@ class DBMIModelAuthenticationBackend(ModelBackend):
             user.email = email
 
         # Check if configured for admin groups
-        admin_group = dbmi_conf('AUTHZ_ADMIN_GROUP')
+        admin_group = dbmi_settings.AUTHZ_ADMIN_GROUP
 
         # Inspect groups/permissions and set user properties accordingly
         if (admin_group and authz.jwt_has_authz(payload, authz.JWT_AUTHZ_GROUPS, admin_group) or
-                (authz.has_permission(request, email, dbmi_conf('CLIENT'), dbmi_conf('AUTHZ_ADMIN_PERMISSION')))):
+                (authz.has_permission(request, email, dbmi_settings.CLIENT, dbmi_settings.AUTHZ_ADMIN_PERMISSION))):
             logger.debug('User {}:{} has been set as staff/superuser'.format(username, email))
 
             # Give them admin flags
@@ -496,11 +495,11 @@ class DBMIAdminModelAuthenticationBackend(DBMIModelAuthenticationBackend):
             return None
 
         # Check authorization
-        if authz.auth_has_authz(request.auth, authz.JWT_AUTHZ_GROUPS, dbmi_conf('AUTHZ_ADMIN_GROUP')):
+        if authz.auth_has_authz(request.auth, authz.JWT_AUTHZ_GROUPS, dbmi_settings.AUTHZ_ADMIN_GROUP):
             return super(DBMIAdminModelAuthenticationBackend, self).authenticate(request, **credentials)
 
         # Check permissions
-        if authz.has_permission(request, request.user, dbmi_conf('CLIENT'), dbmi_conf('AUTHZ_ADMIN_PERMISSION')):
+        if authz.has_permission(request, request.user, dbmi_settings.CLIENT, dbmi_settings.AUTHZ_ADMIN_PERMISSION):
             return super(DBMIAdminModelAuthenticationBackend, self).authenticate(request, **credentials)
 
         # User has a valid JWT but is not an admin
@@ -532,7 +531,7 @@ class DBMIUser(BaseAuthentication):
 
         # Return the user's email to attach to the request object (request.user)
         # Also, return the authz dictionary contained in the JWT claims, if present (request.auth)
-        return payload.get('email'), payload.get(dbmi_conf('JWT_AUTHZ_NAMESPACE'))
+        return payload.get('email'), payload.get(dbmi_settings.JWT_AUTHZ_NAMESPACE)
 
 
 class DBMIModelUser(BaseAuthentication):
@@ -554,7 +553,7 @@ class DBMIModelUser(BaseAuthentication):
 
         # Check if JWT contains AuthZ
         auth = None
-        if dbmi_conf('JWT_AUTHZ_NAMESPACE'):
+        if dbmi_settings.JWT_AUTHZ_NAMESPACE:
 
             # User has a valid JWT from SciAuth
             auth = get_jwt_payload(request, verify=False).get('JWT_AUTHZ_NAMESPACE')
