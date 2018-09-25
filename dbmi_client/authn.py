@@ -453,11 +453,11 @@ class DBMIModelAuthenticationBackend(ModelBackend):
         email = payload['email']
 
         # Check if email or username missing
-        if not user.username is username:
+        if not user.username == username:
             logger.debug('User\' username did not match JWT: {} -> {}'.format(user.username, username))
             user.username = username
 
-        if not user.email is email:
+        if not user.email == email:
             logger.debug('User\' email did not match JWT: {} -> {}'.format(user.email, email))
             user.email = email
 
@@ -472,6 +472,15 @@ class DBMIModelAuthenticationBackend(ModelBackend):
             # Give them admin flags
             user.is_staff = True
             user.is_superuser = True
+
+        else:
+            # Log if downgraded
+            if user.is_staff or user.is_superuser:
+                logger.debug('User {}:{} has been demoted from staff/superuser'.format(username, email))
+
+            # Give them admin flags
+            user.is_staff = False
+            user.is_superuser = False
 
         # Save them
         user.save()
