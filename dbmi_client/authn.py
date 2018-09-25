@@ -495,7 +495,7 @@ class DBMIAdminModelAuthenticationBackend(DBMIModelAuthenticationBackend):
             return None
 
         # Check authorization
-        if authz.auth_has_authz(request.auth, authz.JWT_AUTHZ_GROUPS, dbmi_settings.AUTHZ_ADMIN_GROUP):
+        if authz.jwt_has_authz(payload, authz.JWT_AUTHZ_GROUPS, dbmi_settings.AUTHZ_ADMIN_GROUP):
             return super(DBMIAdminModelAuthenticationBackend, self).authenticate(request, **credentials)
 
         # Check permissions
