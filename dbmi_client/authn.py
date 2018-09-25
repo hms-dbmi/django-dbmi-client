@@ -6,6 +6,7 @@ import requests
 import jwcrypto.jwk as jwk
 
 from django.conf import settings
+from django.core.exceptions import PermissionDenied
 from django.contrib.auth.backends import ModelBackend
 from django.contrib.auth.signals import user_logged_in, user_logged_out
 from django.contrib.auth import get_user_model
@@ -475,6 +476,35 @@ class DBMIModelAuthenticationBackend(ModelBackend):
 
         # Save them
         user.save()
+
+
+class DBMIAdminModelAuthenticationBackend(DBMIModelAuthenticationBackend):
+
+    """
+    Clients must have a valid JWT in the request (either in HTTP Authorization headers or in cookies) as
+    well as admin authorization, either through JWT claims or as a permission in the DBMI AuthZ service.
+    Use this authentication backend for sites that are only accessible to admins and no other users.
+    User model is keyed by the username and email contained in the JWT. Profile and groups are synced
+    from the JWT upon each login.
+    """
+
+    def authenticate(self, request, **credentials):
+
+        # Validate request
+        payload = validate_request(request)
+        if not payload:
+            return None
+
+        # Check authorization
+        if authz.auth_has_authz(request.auth, authz.JWT_AUTHZ_GROUPS, dbmi_conf('AUTHZ_ADMIN_GROUP')):
+            return super(DBMIAdminModelAuthenticationBackend, self).authenticate(request, **credentials)
+
+        # Check permissions
+        if authz.has_permission(request, request.user, dbmi_conf('CLIENT'), dbmi_conf('AUTHZ_ADMIN_PERMISSION')):
+            return super(DBMIAdminModelAuthenticationBackend, self).authenticate(request, **credentials)
+
+        # User has a valid JWT but is not an admin
+        raise PermissionDenied
 
 
 ###################################################################
