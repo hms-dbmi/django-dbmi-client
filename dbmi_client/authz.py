@@ -140,11 +140,38 @@ class DBMIAdminPermission(BasePermission):
                 return True
 
         # Check permissions
-        if has_permission(request, request.user, dbmi_conf('AUTHZ_ADMIN_PERMISSION')):
+        if has_permission(request, request.user, dbmi_conf('CLIENT'), dbmi_conf('AUTHZ_ADMIN_PERMISSION')):
             return True
 
         # Possibly store these elsewhere for records
         logger.info('{} Failed MANAGE permission for DBMI'.format(request.user))
+
+        raise PermissionDenied
+
+
+class DBMIItemPermission(BasePermission):
+    """
+    This permission class is meant to be inherited by clients who need to specify
+    custom item strings for their permission checks. Set the item string and the permission
+    and the base implementation will check the DBMI AuthZ server.
+    """
+
+    # The permission item string to check
+    item = 'dbmi.item.subitem'
+
+    # The permission itself the requesting user must have for this item
+    permission = 'manage'
+
+    def has_permission(self, request, view):
+
+        # Get the email
+        if not hasattr(request, 'user'):
+            logger.warning('No \'user\' (JWT email) attribute on request')
+            raise NotAuthenticated
+
+        # Check permission server for admin permissions
+        if has_permission(request, request.user, self.item, self.permission):
+            return True
 
         raise PermissionDenied
 
@@ -164,20 +191,26 @@ class DBMIOwnerPermission(BasePermission):
 
         # Check if a key has been specified
         key = dbmi_conf('DRF_OBJECT_OWNER_KEY')
-        if key and hasattr(obj, key):
-            logger.debug('Comparing key "{}" on "{}" for ownership'.format(key, obj))
-            return getattr(obj, key) == request.user
+        if key:
+
+            # Ensure the attribute exists
+            if not hasattr(obj, key):
+                logger.error('Ownership key "{}" for object "{}" does not exist'.format(key, obj))
+
+            else:
+                logger.debug('Comparing key "{}" on "{}" for ownership'.format(key, obj))
+                return getattr(obj, key) == request.user
 
         else:
-            logger.error('Ownership key "{}" for object "{}" does not exist'.format(key, obj))
+            logger.debug('No key specified, trying attrs "email", "user" on "{}" for ownership'.format(key, obj))
 
-        # Check email attribute
-        if hasattr(obj, 'email') and obj.email == request.user:
-            return True
+            # Check email attribute
+            if hasattr(obj, 'email') and obj.email == request.user:
+                return True
 
-        # Check for a user attribute
-        if hasattr(obj, 'user') and obj.user == request.user:
-            return True
+            # Check for a user attribute
+            if hasattr(obj, 'user') and obj.user == request.user:
+                return True
 
         raise PermissionDenied
 
@@ -204,7 +237,7 @@ class DBMIAdminOrOwnerPermission(DBMIOwnerPermission):
                 return True
 
         # Lastly, check permission server for admin permissions
-        if has_permission(request, request.user, dbmi_conf('AUTHZ_ADMIN_PERMISSION')):
+        if has_permission(request, request.user, dbmi_conf('CLIENT'), dbmi_conf('AUTHZ_ADMIN_PERMISSION')):
             return True
 
         # Possibly store these elsewhere for records
