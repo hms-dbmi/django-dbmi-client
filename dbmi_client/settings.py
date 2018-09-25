@@ -191,8 +191,15 @@ class DBMISettings(object):
     @property
     def USER_MODEL_ENABLED(self):
 
-        # Return true if the client has added model auth to the backends setting
-        return 'dbmi_client.authn.DBMIModelAuthenticationBackend' in settings.AUTHENTICATION_BACKENDS
+        try:
+            # Check if present in user settings
+            return self.user_settings['USER_MODEL_ENABLED']
+
+        except KeyError:
+
+            # Else, return true if the client has added either backend classes to AUTHENTICATION_BACKENDS
+            return 'dbmi_client.authn.DBMIModelAuthenticationBackend' in settings.AUTHENTICATION_BACKENDS or \
+                   'dbmi_client.authn.DBMIAdminModelAuthenticationBackend' in settings.AUTHENTICATION_BACKENDS
 
     def get_logger(self):
         """
