@@ -27,7 +27,9 @@ def dbmi_user(view):
         # Check if we are using model auth
         if dbmi_settings.USER_MODEL_ENABLED and not _model_auth(request, token):
             logger.debug('JWT checked out but user could not be created/fetched from model')
-            return authn.logout_redirect(request)
+
+            # User creation is likely disabled so inform the user they're unauthorized for this resource
+            raise PermissionDenied
 
         # Let it go
         return view(request, *args, **kwargs)
@@ -53,7 +55,9 @@ def dbmi_admin(view):
         # Check if we are using model auth
         if dbmi_settings.USER_MODEL_ENABLED and not _model_auth(request, token):
             logger.debug('JWT checked out but user could not be created/fetched from model')
-            return authn.logout_redirect(request)
+
+            # User creation is likely disabled or only admin users are enabled
+            raise PermissionDenied
 
         # Check claims in the JWT first, as it is least costly.
         if authz.jwt_has_authz(payload, authz.JWT_AUTHZ_GROUPS, dbmi_settings.AUTHZ_ADMIN_GROUP):
@@ -98,7 +102,9 @@ def dbmi_group(group):
             # Check if we are using model auth
             if dbmi_settings.USER_MODEL_ENABLED and not _model_auth(request, token):
                 logger.debug('JWT checked out but user could not be created/fetched from model')
-                return authn.logout_redirect(request)
+
+                # User creation is likely disabled so inform the user they're unauthorized for this resource
+                raise PermissionDenied
 
             # Check claims in the JWT first, as it is least costly.
             if authz.jwt_has_authz(payload, authz.JWT_AUTHZ_GROUPS, group):
@@ -139,7 +145,9 @@ def dbmi_role(role):
             # Check if we are using model auth
             if dbmi_settings.USER_MODEL_ENABLED and not _model_auth(request, token):
                 logger.debug('JWT checked out but user could not be created/fetched from model')
-                return authn.logout_redirect(request)
+
+                # User creation is likely disabled so inform the user they're unauthorized for this resource
+                raise PermissionDenied
 
             # Check claims in the JWT first, as it is least costly.
             if authz.jwt_has_authz(payload, authz.JWT_AUTHZ_ROLES, role):
@@ -180,7 +188,9 @@ def dbmi_app_permission(permission):
             # Check if we are using model auth
             if dbmi_settings.USER_MODEL_ENABLED and not _model_auth(request, token):
                 logger.debug('JWT checked out but user could not be created/fetched from model')
-                return authn.logout_redirect(request)
+
+                # User creation is likely disabled so inform the user they're unauthorized for this resource
+                raise PermissionDenied
 
             # Check claims in the JWT first, as it is least costly.
             if authz.jwt_has_authz(payload, authz.JWT_AUTHZ_PERMISSIONS, permission):
@@ -230,7 +240,9 @@ def dbmi_item_permission(item, permission):
             # Check if we are using model auth
             if dbmi_settings.USER_MODEL_ENABLED and not _model_auth(request, token):
                 logger.debug('JWT checked out but user could not be created/fetched from model')
-                return authn.logout_redirect(request)
+
+                # User creation is likely disabled so inform the user they're unauthorized for this resource
+                raise PermissionDenied
 
             # Get their email address
             email = authn.get_jwt_email(request, verify=False)
