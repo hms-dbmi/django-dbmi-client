@@ -6,6 +6,8 @@ import logging
 from django.conf import settings
 from django.test.signals import setting_changed
 
+from dbmi_client import environment as env
+
 # Always import this module as follows:
 # from dbmi_client import settings [as dbmi_settings]
 
@@ -18,25 +20,31 @@ DBMI_ENVIRONMENTS = {
         'AUTHN_URL': 'https://authentication.dbmi.hms.harvard.edu',
         'AUTHZ_URL': 'https://authorization.dbmi.hms.harvard.edu',
         'REG_URL': 'https://registration.dbmi.hms.harvard.edu',
+        'FILESERVICE_URL': 'https://files.dbmi.hms.harvard.edu',
         'JWT_AUTHZ_NAMESPACE': 'https://authorization.dbmi.hms.harvard.edu',
     },
     'dev': {
         'AUTHN_URL': 'https://authentication.aws.dbmi-dev.hms.harvard.edu',
         'AUTHZ_URL': 'https://authorization.aws.dbmi-dev.hms.harvard.edu',
         'REG_URL': 'https://registration.aws.dbmi-dev.hms.harvard.edu',
+        'FILESERVICE_URL': 'https://fileservice.aws.dbmi-dev.hms.harvard.edu',
         'JWT_AUTHZ_NAMESPACE': 'https://authorization.aws.dbmi-dev.hms.harvard.edu',
     }
 }
 
 CONFIG_DEFAULTS = {
+
+    # The identifier for this service and/or project
+    'CLIENT': None,
+
     # Client options, assume production environment
     'ENVIRONMENT': 'prod',
 
     # Set prod URLs
-    'AUTHN_URL': 'https://authentication.dbmi.hms.harvard.edu',
-    'AUTHZ_URL': 'https://authorization.dbmi.hms.harvard.edu',
-    'REG_URL': 'https://registration.dbmi.hms.harvard.edu',
-    'JWT_AUTHZ_NAMESPACE': 'https://authorization.dbmi.hms.harvard.edu',
+    'AUTHN_URL': None,
+    'AUTHZ_URL': None,
+    'REG_URL': None,
+    'JWT_AUTHZ_NAMESPACE': None,
 
     # Optionally disable logging
     'ENABLE_LOGGING': True,
@@ -56,8 +64,10 @@ CONFIG_DEFAULTS = {
     'JWT_COOKIE_DOMAIN': '.dbmi.hms.harvard.edu',
 
     # Auth0 account details
-    'AUTH0_CLIENT_IDS': ['!!! must be configured by client !!!'],
-    'AUTH0_TENANT': 'dbmiauth',
+    'AUTH0_CLIENT_ID': None,
+    'AUTH0_SECRET': None,  # Only needed if login module is enabled
+    'AUTH0_TENANT': None,
+    'AUTH0_SCOPE': 'openid email',
 
     # Configurations surrounding usage of a local Django user model
     'USER_MODEL_ENABLED': False,
@@ -65,10 +75,17 @@ CONFIG_DEFAULTS = {
 
     # These configurations are specific to DRF related auth/permissions
     'DRF_OBJECT_OWNER_KEY': 'user',
+
+    # Filservice
+    'FILESERVICE_BUCKETS': [],  # The name of the S3 buckets Fileservice should use
+    'FILESERVICE_GROUP': None,  # Typically would be the same as CLIENT
+
+    # Login settings
+    'LOGIN_REDIRECT_KEY': 'next',  # The query parameter key specifying where logged in users should be sent
 }
 
 # List of settings that cannot be defaulted and must be user-defined
-REQUIRED_SETTINGS = ('CLIENT', 'AUTH0_CLIENT_IDS', 'AUTH0_TENANT')
+REQUIRED_SETTINGS = ('CLIENT', 'AUTH0_CLIENT_ID', 'AUTH0_TENANT')
 
 # List of settings that have been removed
 REMOVED_SETTINGS = ()
@@ -92,15 +109,21 @@ class DBMISettings(object):
     @property
     def user_settings(self):
 
-        # Check to see if user conigs have been loaded or not
+        # Check to see if user configs have been loaded or not
         if not hasattr(self, '_user_settings'):
 
             # Load user-specified configurations
             user_settings = getattr(settings, 'DBMI_CLIENT_CONFIG', {})
 
             # Update the client config with pre-defined environment URLs, etc
-            if user_settings['ENVIRONMENT'] in DBMI_ENVIRONMENTS:
-                user_settings.update(DBMI_ENVIRONMENTS[user_settings['ENVIRONMENT']])
+            if user_settings.get('ENVIRONMENT') in DBMI_ENVIRONMENTS:
+                user_settings.update(DBMI_ENVIRONMENTS[user_settings.get('ENVIRONMENT')])
+
+            else:
+                # Check for them in environment
+                for key in DBMI_ENVIRONMENTS['prod'].keys():
+                    if env.get_str('DBMI_{}'.format(key.upper())):
+                        user_settings[key] = env.get_str('DBMI_{}'.format(key.upper()))
 
             # Check them
             self._user_settings = self.__check_user_settings(user_settings)
@@ -138,8 +161,8 @@ class DBMISettings(object):
         if 'CLIENT' not in user_settings:
             raise AttributeError('CLIENT configuration must be set')
 
-        if 'AUTH0_TENANT' not in user_settings or 'AUTH0_CLIENT_IDS' not in user_settings:
-            raise AttributeError('AUTH0_TENANT and AUTH0_CLIENT_IDS configurations must be set')
+        if 'AUTH0_TENANT' not in user_settings or 'AUTH0_CLIENT_ID' not in user_settings:
+            raise AttributeError('AUTH0_TENANT and AUTH0_CLIENT_ID configurations must be set')
 
         # Ensure environment is set and if not prod or dev, ensure service URLs are provided
         if 'ENVIRONMENT' in user_settings and \

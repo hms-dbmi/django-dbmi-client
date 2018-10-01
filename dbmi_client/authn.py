@@ -5,15 +5,16 @@ import base64
 import requests
 import jwcrypto.jwk as jwk
 
+from django.contrib import auth as django_auth
+from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import PermissionDenied
 from django.contrib.auth.backends import ModelBackend
 from django.contrib.auth.signals import user_logged_in, user_logged_out
-from django.contrib.auth import get_user_model
 from django.db.models import Q
+from django.utils.functional import SimpleLazyObject
+from django.utils.deprecation import MiddlewareMixin
 from django.core.exceptions import MultipleObjectsReturned
 from django.shortcuts import redirect
-from django.contrib.auth import logout
-from django.contrib.auth import authenticate as django_authenticate
 from rest_framework.authentication import BaseAuthentication
 from rest_framework import exceptions
 
@@ -311,7 +312,7 @@ def validate_rs256_jwt(jwt_string):
             return None
 
         # Check that the Client ID is in the allowed list of Auth0 Client IDs for this application
-        if auth0_client_id not in dbmi_settings.AUTH0_CLIENT_IDS:
+        if not auth0_client_id == dbmi_settings.AUTH0_CLIENT_ID:
             logger.error('Auth0 Client ID not allowed')
             return None
 
@@ -338,6 +339,80 @@ def validate_rs256_jwt(jwt_string):
 # Django Custom Authentication Backend
 #
 ###################################################################
+
+
+class DBMIJWTUser(AnonymousUser):
+    """
+    This class represents a JWT user for an application that does not persist those
+    users to the store.
+    """
+    email = None
+    username = None
+    id = None
+    pk = None
+    is_active = True
+    is_staff = False
+    is_superuser = False
+
+    def __init__(self, request):
+
+        # Get the payload
+        payload = get_jwt_payload(request, verify=False)
+
+        # Set properties
+        self.username = payload.get('sub')
+        self.id = payload.get('sub')
+        self.email = payload.get('email')
+
+    def __str__(self):
+        return self.id
+
+    def __eq__(self, other):
+        return hasattr(other, 'id') and self.id == other.id
+
+    def __hash__(self):
+        return hash(self.id)
+
+    def save(self):
+        raise NotImplementedError("Django doesn't provide a DB representation for DBMIJWTUser.")
+
+    def delete(self):
+        raise NotImplementedError("Django doesn't provide a DB representation for DBMIJWTUser.")
+
+    def set_password(self, raw_password):
+        raise NotImplementedError("Django doesn't provide a DB representation for DBMIJWTUser.")
+
+    def check_password(self, raw_password):
+        raise NotImplementedError("Django doesn't provide a DB representation for DBMIJWTUser.")
+
+    @property
+    def is_anonymous(self):
+        return False
+
+    @property
+    def is_authenticated(self):
+        return True
+
+    def get_username(self):
+        return self.username
+
+
+class DBMIAuthenticationMiddleware(MiddlewareMixin):
+
+    def process_request(self, request):
+        request.user = SimpleLazyObject(lambda: self.__class__.get_jwt_user(request))
+
+    @staticmethod
+    def get_jwt_user(request):
+
+        # Try built-in Django auth routines
+        user = django_auth.get_user(request)
+        if user.is_authenticated:
+
+            # User is already authenticated, return
+            return user
+
+        return AnonymousUser()
 
 
 def login(request, user, backend='dbmi_client.authn.DBMIModelAuthenticationBackend'):
@@ -376,77 +451,19 @@ def logout(request):
         request.user = AnonymousUser()
 
 
-class DBMIModelAuthenticationBackend(ModelBackend):
+class DBMIAuthenticationBackend(object):
 
-    """
-    Clients must have a valid JWT in the request (either in HTTP Authorization headers or in cookies).
-    If enabled, users are auto-created upon first attempted login with a valid JWT. The
-    User model is keyed by the username and email contained in the JWT. Profile and groups are synced
-    from the JWT upon each login.
-    """
-
-    def authenticate(self, request, **credentials):
-
-        # Get the token
-        token = credentials.get('token')
-        if not token:
-            token = get_jwt(request)
-            if not token:
-                return None
-
-        # Validate request
-        payload = validate_rs256_jwt(token)
-        if not payload:
-            return None
-
-        # Get their email and check for their record
-        email = payload.get('email')
-        username = payload.get('sub')
-        if not email or not username:
-            logger.error('No sub or email in valid JWT: {}'.format(payload))
-            return None
-
-        # Fetch the current User model
-        User = get_user_model()
-        user = None
-        try:
-            # Find the user
-            user = User.objects.get(Q(username=username) | Q(email=email))
-            logger.debug('Found user: {}:{}'.format(username, email))
-
-        except MultipleObjectsReturned:
-            logger.error('Duplicate users exist for {} : {}'.format(username, email))
-
-        except User.DoesNotExist:
-
-            # Check if we should autocreate users
-            if dbmi_settings.USER_MODEL_AUTOCREATE:
-
-                # Create them
-                user = User(username=username, email=email)
-                user.set_unusable_password()
-                logger.debug('Created user: {}:{}'.format(username, email))
-
-        # If a user was found, sync them
-        if user:
-
-            # Update them and save them
-            self.update_user(request, payload, user)
-
-            return user
-
-        else:
-            return None
-
-    def update_user(self, request, payload, user):
+    def sync_user(self, request, user):
         """
         Take a recently authenticated user and sync up their local user properties
         with those contained in their JWT.
         :param request: The incoming request
-        :param payload: The JWT payload
         :param user: The User
-        :return: None
+        :return: user
         """
+
+        # Get the unverified payload
+        payload = get_jwt_payload(request, verify=False)
 
         # Get properties
         username = payload['sub']
@@ -482,8 +499,112 @@ class DBMIModelAuthenticationBackend(ModelBackend):
             user.is_staff = False
             user.is_superuser = False
 
-        # Save them
-        user.save()
+        return user
+
+
+class DBMIJWTAuthenticationBackend(DBMIAuthenticationBackend):
+
+    """
+    Clients must have a valid JWT in the request (either in HTTP Authorization headers or in cookies).
+    Users objects are an instance of DBMIJWTUser and mimic the properties and methods of Django's built-in
+    contrib.auth.models.User model, but with no persistence. All properties will be valid but any attempt to
+    save or link these instances to another model instance will fail.
+    """
+
+    def authenticate(self, request, **credentials):
+
+        # Get the token
+        token = credentials.get('token')
+        if not token:
+            token = get_jwt(request)
+            if not token:
+                return None
+
+        # Validate request
+        payload = validate_rs256_jwt(token)
+        if not payload:
+            return None
+
+        # Get their email and check for their record
+        email = payload.get('email')
+        username = payload.get('sub')
+        if not email or not username:
+            logger.error('No sub or email in valid JWT: {}'.format(payload))
+            return None
+
+        return self.get_user(request)
+
+    def get_user(self, request):
+
+        # Create an instance of the JWT user
+        user = DBMIJWTUser(request)
+
+        # Sync their profile and return them
+        return self.sync_user(request, user)
+
+
+class DBMIModelAuthenticationBackend(ModelBackend, DBMIAuthenticationBackend):
+
+    """
+    Clients must have a valid JWT in the request (either in HTTP Authorization headers or in cookies).
+    If enabled, users are auto-created upon first attempted login with a valid JWT. The
+    User model is keyed by the username and email contained in the JWT. Profile and groups are synced
+    from the JWT upon each login.
+    """
+
+    def authenticate(self, request, **credentials):
+
+        # Get the token
+        token = credentials.get('token')
+        if not token:
+            token = get_jwt(request)
+            if not token:
+                return None
+
+        # Validate request
+        payload = validate_rs256_jwt(token)
+        if not payload:
+            return None
+
+        # Get their email and check for their record
+        email = payload.get('email')
+        username = payload.get('sub')
+        if not email or not username:
+            logger.error('No sub or email in valid JWT: {}'.format(payload))
+            return None
+
+        # Fetch the current User model
+        User = django_auth.get_user_model()
+        user = None
+        try:
+            # Find the user
+            user = User.objects.get(Q(username=username) | Q(email=email))
+            logger.debug('Found user: {}:{}'.format(username, email))
+
+        except MultipleObjectsReturned:
+            logger.error('Duplicate users exist for {} : {}'.format(username, email))
+
+        except User.DoesNotExist:
+
+            # Check if we should autocreate users
+            if dbmi_settings.USER_MODEL_AUTOCREATE:
+
+                # Create them
+                user = User(username=username, email=email)
+                user.set_unusable_password()
+                logger.debug('Created user: {}:{}'.format(username, email))
+
+        # If a user was found, sync them
+        if user:
+
+            # Update them and save them
+            user = self.sync_user(request, user)
+            user.save()
+
+            return user
+
+        else:
+            return None
 
 
 class DBMIAdminModelAuthenticationBackend(DBMIModelAuthenticationBackend):
@@ -556,7 +677,7 @@ class DBMIModelUser(BaseAuthentication):
 
         # Call the standard Django authenticate method, that will in
         # turn call DBMIModelAuthenticationBackend.authenticate
-        user = django_authenticate(request, token=token)
+        user = django_auth.authenticate(request, token=token)
         if not user:
             raise exceptions.AuthenticationFailed
 

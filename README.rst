@@ -37,7 +37,7 @@ Quick start
 
         'JWT_COOKIE_DOMAIN': '.my-client.hms.harvard.edu', # This setting must be a subdomain of your app's public domain
 
-        'AUTH0_CLIENT_IDS': ['xxxxxxxxxxxxxxx,yyyyyyyyyyyyyyyy'], # A list of Auth0 clients to authenticate for
+        'AUTH0_CLIENT_ID': 'xxxxxxxxxxxxxxx', # An Auth0 client to authenticate for
         'AUTH0_TENANT': 'my-client, # The Auth0 tenant identifier that your Auth0 client is registered in
 
         'AUTHN_TITLE': 'My Client', # A title of your app to be shown on the login screen
@@ -69,7 +69,7 @@ Quick start
 
         'JWT_COOKIE_DOMAIN': '.my-client.hms.harvard.edu', # This setting must be a subdomain of your app's public domain
 
-        'AUTH0_CLIENT_IDS': ['xxxxxxxxxxxxxxx,yyyyyyyyyyyyyyyy'], # A list of Auth0 clients to authenticate for
+        'AUTH0_CLIENT_ID': 'yyyyyyyyyyyyyyyy', # An Auth0 client to authenticate for
         'AUTH0_TENANT': 'my-client, # The Auth0 tenant identifier that your Auth0 client is registered in
 
         'AUTHN_TITLE': 'My Client', # A title of your app to be shown on the login screen

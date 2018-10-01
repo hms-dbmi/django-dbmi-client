@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>{{ title|default:"DBMI App" }} Login</title>
+
+    {% load staticfiles %}
+    {% load static %}
+    {% load bootstrap3 %}
+
+    {% bootstrap_css %}
+
+    {% block stylesheets %}{% endblock %}
+
+    <style>
+        body {
+            background-color: crimson;
+        }
+
+        .navbar {
+            height: 105px;
+            margin-bottom: 50px;
+        }
+
+        .navbar-brand {
+          transform: translateX(-50%);
+          left: 50%;
+          position: absolute;
+        }
+    </style>
+
+</head>
+    <body>
+
+        <nav id="nav-bar" class="navbar navbar-default">
+            <div class="container-fluid">
+                <div class="row">
+                    <div class="center-block">
+                        <div class="navbar-header">
+                            <a class="navbar-brand" href="https://dbmi.hms.harvard.edu"><img height="70" src="{% static 'dbmi_client/login/img/hms_dbmi_logo.png' %}" /></a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <div id="container" class="container">
+            {% block content %}{% endblock %}
+        </div>
+
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+        {% bootstrap_javascript %}
+        <script src="https://cdn.auth0.com/js/lock/11.7.2/lock.min.js"></script>
+
+        {% block javascript %}{% endblock %}
+    </body>
+</html>

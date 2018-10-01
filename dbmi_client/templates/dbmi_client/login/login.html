@@ -1,0 +1,35 @@
+{% extends 'dbmi_client/login/base.html' %}
+{% load bootstrap3 %}
+{% load staticfiles %}
+{% load static %}
+
+{% block content %}
+    <div class="row">
+        <div id="auth0LockDiv" class="col-xs"></div>
+    </div>
+{% endblock %}
+
+{% block javascript %}
+    <script type="text/javascript">
+        var title = "{% if project_title and not project_icon_url %}{{ project_title }}{% else %}{% endif %}";
+        var lock = new Auth0Lock('{{ auth0_client_id }}', '{{ auth0_domain }}', {
+            auth: {
+                redirectUrl: '{{ callback_url }}',
+                responseType: 'code',
+                params: {
+                    scope: '{{ scope|default:"openid email" }}'
+                },
+                sso: true
+            },
+            container: 'auth0LockDiv',
+            theme: {
+                logo: '{% if icon_url %}{{ icon_url }}{% else %}{% static "dbmi_client/login/img/hms_shield.png" %}{% endif %}',
+                primaryColor: "crimson"
+            },
+            languageDictionary: {
+                title: title
+            }
+        });
+        lock.show();
+    </script>
+{% endblock %}
