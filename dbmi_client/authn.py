@@ -308,7 +308,7 @@ def validate_rs256_jwt(jwt_string):
         try:
             auth0_client_id = str(jwt.decode(jwt_string, verify=False)['aud'])
         except Exception as e:
-            logger.error('Failed to get the aud from jwt payload')
+            logger.error('Failed to get the aud from jwt payload: {}'.format(e))
             return None
 
         # Check that the Client ID is in the allowed list of Auth0 Client IDs for this application
@@ -326,11 +326,14 @@ def validate_rs256_jwt(jwt_string):
 
             return payload
 
-        except jwt.ExpiredSignatureError as err:
-            logger.warning("JWT Expired: {}".format(err))
+        except jwt.ExpiredSignatureError as e:
+            logger.warning("JWT Expired: {}".format(e))
 
-        except jwt.InvalidTokenError as err:
-            logger.warning("Invalid JWT Token: {}".format(err))
+        except jwt.InvalidTokenError as e:
+            logger.warning("Invalid JWT Token: {}".format(e))
+
+        except Exception as e:
+            logger.error("Exception: {}".format(e))
 
     return None
 
