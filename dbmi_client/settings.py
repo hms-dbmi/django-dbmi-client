@@ -1,5 +1,6 @@
 from __future__ import absolute_import, unicode_literals
 
+import os
 import warnings
 import logging
 
@@ -112,21 +113,25 @@ class DBMISettings(object):
         # Check to see if user configs have been loaded or not
         if not hasattr(self, '_user_settings'):
 
-            # Load user-specified configurations
-            user_settings = getattr(settings, 'DBMI_CLIENT_CONFIG', {})
+            try:
+                # Load user-specified configurations
+                user_settings = getattr(settings, 'DBMI_CLIENT_CONFIG', {})
 
-            # Update the client config with pre-defined environment URLs, etc
-            if user_settings.get('ENVIRONMENT') in DBMI_ENVIRONMENTS:
-                user_settings.update(DBMI_ENVIRONMENTS[user_settings.get('ENVIRONMENT')])
+                # Update the client config with pre-defined environment URLs, etc
+                if user_settings.get('ENVIRONMENT') in DBMI_ENVIRONMENTS:
+                    user_settings.update(DBMI_ENVIRONMENTS[user_settings.get('ENVIRONMENT')])
 
-            else:
-                # Check for them in environment
-                for key in DBMI_ENVIRONMENTS['prod'].keys():
-                    if env.get_str('DBMI_{}'.format(key.upper())):
-                        user_settings[key] = env.get_str('DBMI_{}'.format(key.upper()))
+                else:
+                    # Check for them in environment
+                    for key in DBMI_ENVIRONMENTS['prod'].keys():
+                        if env.get_str('DBMI_{}'.format(key.upper())):
+                            user_settings[key] = env.get_str('DBMI_{}'.format(key.upper()))
 
-            # Check them
-            self._user_settings = self.__check_user_settings(user_settings)
+                # Check them
+                self._user_settings = self.__check_user_settings(user_settings)
+
+            except Exception as e:
+                raise SystemError('DBMI Client settings are invalid: {}'.format(e))
 
         return self._user_settings
 
@@ -172,11 +177,25 @@ class DBMISettings(object):
 
             missing_urls = []
             if 'AUTHN_URL' not in user_settings:
-                missing_urls.append('AUTHN_URL')
+                # Check environment
+                if os.environ.get('DBMI_AUTHN_URL'):
+                    user_settings['AUTHN_URL'] = os.environ.get('DBMI_AUTHN_URL')
+                else:
+                    missing_urls.append('AUTHN_URL')
+
             if 'AUTHZ_URL' not in user_settings:
-                missing_urls.append('AUTHZ_URL')
+                # Check environment
+                if os.environ.get('DBMI_AUTHZ_URL'):
+                    user_settings['AUTHZ_URL'] = os.environ.get('DBMI_AUTHZ_URL')
+                else:
+                    missing_urls.append('AUTHZ_URL')
+
             if 'REG_URL' not in user_settings:
-                missing_urls.append('REG_URL')
+                # Check environment
+                if os.environ.get('DBMI_REG_URL'):
+                    user_settings['REG_URL'] = os.environ.get('DBMI_REG_URL')
+                else:
+                    missing_urls.append('REG_URL')
             if missing_urls:
                 raise AttributeError('{} configuration(s) must be set'.format(missing_urls))
 
@@ -239,7 +258,7 @@ class DBMISettings(object):
 
 
 # Create the instance by which the settings should be accessed
-dbmi_settings = DBMISettings(None, CONFIG_DEFAULTS)
+dbmi_settings = DBMISettings(getattr(settings, 'DBMI_CLIENT_CONFIG', {}), CONFIG_DEFAULTS)
 
 
 def reload_dbmi_settings(*args, **kwargs):
