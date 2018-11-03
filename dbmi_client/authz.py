@@ -84,6 +84,7 @@ def has_permission(request, email, item, permission):
         # Build the request
         url = furl(dbmi_settings.AUTHZ_URL)
         url.path.segments.append('user_permission')
+        url.path.segments.append('')
         url.query.params.add('email', email)
         url.query.params.add('item', item)
         url.query.params.add('client', dbmi_settings.CLIENT)
