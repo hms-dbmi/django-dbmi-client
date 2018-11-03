@@ -525,6 +525,11 @@ class DBMIModelAuthenticationBackend(DBMIAuthenticationBackend):
         Called when a user in the model does not exist. This creates the user in the
         model.
         """
+        # Check if autocreate is enabled
+        if not dbmi_settings.USER_MODEL_AUTOCREATE:
+            logger.debug('User autocreate is disabled, boot the current user')
+            raise PermissionDenied
+
         # Get username and email
         username = get_jwt_username(request, verify=False)
         email = get_jwt_email(request, verify=False)
