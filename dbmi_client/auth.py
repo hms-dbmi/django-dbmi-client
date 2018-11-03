@@ -19,17 +19,9 @@ def dbmi_user(view):
     '''
     def wrap(request, *args, **kwargs):
 
-        # Validate request
-        token, payload = _token_auth(request)
-        if not token:
+        # Check for current user
+        if not request.user or not request.user.is_authenticated:
             return authn.logout_redirect(request)
-
-        # Check if we are using model auth
-        if dbmi_settings.USER_MODEL_ENABLED and not _model_auth(request, token):
-            logger.debug('JWT checked out but user could not be created/fetched from model')
-
-            # User creation is likely disabled so inform the user they're unauthorized for this resource
-            raise PermissionDenied
 
         # Let it go
         return view(request, *args, **kwargs)
@@ -47,17 +39,12 @@ def dbmi_admin(view):
     '''
     def wrap(request, *args, **kwargs):
 
-        # Validate request
-        token, payload = _token_auth(request)
-        if not token:
+        # Check for current user
+        if not request.user or not request.user.is_authenticated:
             return authn.logout_redirect(request)
 
-        # Check if we are using model auth
-        if dbmi_settings.USER_MODEL_ENABLED and not _model_auth(request, token):
-            logger.debug('JWT checked out but user could not be created/fetched from model')
-
-            # User creation is likely disabled or only admin users are enabled
-            raise PermissionDenied
+        # Get the payload
+        payload = authn.get_jwt_payload(request, verify=False)
 
         # Check claims in the JWT first, as it is least costly.
         if authz.jwt_has_authz(payload, authz.JWT_AUTHZ_GROUPS, dbmi_settings.AUTHZ_ADMIN_GROUP):
@@ -94,17 +81,12 @@ def dbmi_group(group):
 
         def wrap(request, *args, **kwargs):
 
-            # Validate request
-            token, payload = _token_auth(request)
-            if not token:
+            # Check for current user
+            if not request.user or not request.user.is_authenticated:
                 return authn.logout_redirect(request)
 
-            # Check if we are using model auth
-            if dbmi_settings.USER_MODEL_ENABLED and not _model_auth(request, token):
-                logger.debug('JWT checked out but user could not be created/fetched from model')
-
-                # User creation is likely disabled so inform the user they're unauthorized for this resource
-                raise PermissionDenied
+            # Get the payload
+            payload = authn.get_jwt_payload(request, verify=False)
 
             # Check claims in the JWT first, as it is least costly.
             if authz.jwt_has_authz(payload, authz.JWT_AUTHZ_GROUPS, group):
@@ -137,17 +119,12 @@ def dbmi_role(role):
 
         def wrap(request, *args, **kwargs):
 
-            # Validate request
-            token, payload = _token_auth(request)
-            if not token:
+            # Check for current user
+            if not request.user or not request.user.is_authenticated:
                 return authn.logout_redirect(request)
 
-            # Check if we are using model auth
-            if dbmi_settings.USER_MODEL_ENABLED and not _model_auth(request, token):
-                logger.debug('JWT checked out but user could not be created/fetched from model')
-
-                # User creation is likely disabled so inform the user they're unauthorized for this resource
-                raise PermissionDenied
+            # Get the payload
+            payload = authn.get_jwt_payload(request, verify=False)
 
             # Check claims in the JWT first, as it is least costly.
             if authz.jwt_has_authz(payload, authz.JWT_AUTHZ_ROLES, role):
@@ -180,17 +157,12 @@ def dbmi_app_permission(permission):
 
         def wrap(request, *args, **kwargs):
 
-            # Validate request
-            token, payload = _token_auth(request)
-            if not token:
+            # Check for current user
+            if not request.user or not request.user.is_authenticated:
                 return authn.logout_redirect(request)
 
-            # Check if we are using model auth
-            if dbmi_settings.USER_MODEL_ENABLED and not _model_auth(request, token):
-                logger.debug('JWT checked out but user could not be created/fetched from model')
-
-                # User creation is likely disabled so inform the user they're unauthorized for this resource
-                raise PermissionDenied
+            # Get the payload
+            payload = authn.get_jwt_payload(request, verify=False)
 
             # Check claims in the JWT first, as it is least costly.
             if authz.jwt_has_authz(payload, authz.JWT_AUTHZ_PERMISSIONS, permission):
@@ -232,17 +204,9 @@ def dbmi_item_permission(item, permission):
 
         def wrap(request, *args, **kwargs):
 
-            # Validate request
-            token, payload = _token_auth(request)
-            if not token:
+            # Check for current user
+            if not request.user or not request.user.is_authenticated:
                 return authn.logout_redirect(request)
-
-            # Check if we are using model auth
-            if dbmi_settings.USER_MODEL_ENABLED and not _model_auth(request, token):
-                logger.debug('JWT checked out but user could not be created/fetched from model')
-
-                # User creation is likely disabled so inform the user they're unauthorized for this resource
-                raise PermissionDenied
 
             # Get their email address
             email = authn.get_jwt_email(request, verify=False)
@@ -263,51 +227,3 @@ def dbmi_item_permission(item, permission):
         return wrap
 
     return real_decorator
-
-
-def _token_auth(request):
-    """
-    Accepts the request and checks for a valid JWT. If it exists, the payload is returned
-    :param request: The incoming request
-    :return: The JWT payload dict
-    """
-    # Get the token
-    token = authn.get_jwt(request)
-    if not token:
-        return None, None
-
-    # Validate request
-    payload = authn.validate_rs256_jwt(token)
-    if not payload:
-        return None, None
-
-    return token, payload
-
-
-def _model_auth(request, token):
-    """
-    Accepts the request and the JWT and ensures the User model is brought into the mix
-    and the user instance properly authenticated and attached to the request.
-    :param request: The incoming request
-    :param token: The verified JWT
-    :return: Whether the model authenticated succeeded or not
-    """
-    # Check if already authenticated
-    if request.user.is_authenticated():
-        return True
-
-    # Clear user
-    request.user = None
-
-    # Log the user in through Django's auth system
-    user = django_auth.authenticate(request=request, token=token)
-    if user:
-
-        # Log them in
-        authn.login(request, user)
-        return True
-
-    else:
-        logger.warning("Could not log user in: {}".format(authn.get_jwt_email(request, verify=False)))
-
-    return False
