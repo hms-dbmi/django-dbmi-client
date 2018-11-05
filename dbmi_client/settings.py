@@ -101,9 +101,7 @@ class DBMISettings(object):
     Any setting with string import paths will be automatically resolved
     and return the class, rather than the string literal.
     """
-    def __init__(self, user_settings=None, defaults=None):
-        if user_settings:
-            self._user_settings = self.__check_user_settings(user_settings)
+    def __init__(self, defaults=None):
         self.defaults = defaults or CONFIG_DEFAULTS
         self._cached_attrs = set()
 
@@ -258,7 +256,7 @@ class DBMISettings(object):
 
 
 # Create the instance by which the settings should be accessed
-dbmi_settings = DBMISettings(getattr(settings, 'DBMI_CLIENT_CONFIG', {}), CONFIG_DEFAULTS)
+dbmi_settings = DBMISettings(CONFIG_DEFAULTS)
 
 
 def reload_dbmi_settings(*args, **kwargs):
