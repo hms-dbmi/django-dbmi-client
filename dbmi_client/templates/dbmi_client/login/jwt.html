@@ -1,0 +1,60 @@
+{% extends 'dbmi_client/login/base.html' %}
+{% load bootstrap3 %}
+{% load staticfiles %}
+{% load static %}
+
+{% block content %}
+    <div class="row">
+        <div class="col-xs-12">
+            <div class="input-group">
+                <span class="input-group-btn">
+                    <button id="jwt-copy" data-clipboard-target="#jwt" class="btn btn-default" data-toggle="tooltip" title="Copy to clipboard">{% bootstrap_icon "copy" %}</button>
+                </span>
+                <input id="jwt" class="form-control" placeholder="Token" aria-describedby="jwt" style="cursor: auto;" value="{{ jwt }}" readonly>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block javascript %}
+    <script src="{% static 'fileservice/js/clipboard.min.js' %}"></script>
+    <script type="application/javascript">
+        $(document).ready(function(){
+
+            // Initialize tooltips
+            $('[data-toggle="tooltip"]').tooltip();
+
+            // Reset tooltips
+            $('[data-toggle="tooltip"]').on('hidden.bs.tooltip', function(){
+                $(this).attr('data-original-title', "Copy to clipboard");
+            });
+
+            // Setup copy button
+            let clipboard = new ClipboardJS("#jwt-copy");
+            clipboard.on('success', function(e) {
+
+                // Update tooltip
+                $("#jwt-copy").attr('data-original-title', "Copied!")
+                    .tooltip('fixTitle')
+                    .tooltip('setContent')
+                    .tooltip('show');
+
+                e.clearSelection();
+            });
+
+            clipboard.on('error', function(e) {
+
+                // Update tooltip
+                $("#jwt-copy").attr('data-original-title', "Error!")
+                    .tooltip('fixTitle')
+                    .tooltip('setContent')
+                    .tooltip('show');
+
+                // Log it
+                console.log('Copy error:' + e.toString());
+
+                e.clearSelection();
+            });
+        });
+    </script>
+{% endblock %}

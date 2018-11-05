@@ -1,11 +1,12 @@
 from django.core.exceptions import PermissionDenied
+from django.contrib import auth as django_auth
 
-from dbmi_client.settings import dbmi_conf
+from dbmi_client.settings import dbmi_settings
 from dbmi_client import authn
 from dbmi_client import authz
 
-import logging
-logger = logging.getLogger(__name__)
+# Get the app logger
+logger = dbmi_settings.get_logger()
 
 
 def dbmi_user(view):
@@ -18,17 +19,12 @@ def dbmi_user(view):
     '''
     def wrap(request, *args, **kwargs):
 
-        # Get the token
-        token = authn.get_jwt(request)
-        if not token:
+        # Check for current user
+        if not request.user or not request.user.is_authenticated:
             return authn.logout_redirect(request)
 
-        # User has a valid JWT from SciAuth
-        if authn.validate_rs256_jwt(token):
-            return view(request, *args, **kwargs)
-
-        else:
-            return authn.logout_redirect(request)
+        # Let it go
+        return view(request, *args, **kwargs)
 
     return wrap
 
@@ -43,29 +39,29 @@ def dbmi_admin(view):
     '''
     def wrap(request, *args, **kwargs):
 
-        # Get the token
-        token = authn.get_jwt(request)
-        if not token:
+        # Check for current user
+        if not request.user or not request.user.is_authenticated:
             return authn.logout_redirect(request)
 
-        # Validate request
-        payload = authn.validate_rs256_jwt(token)
-        if not payload:
-            return authn.logout_redirect(request)
+        # Get the payload
+        payload = authn.get_jwt_payload(request, verify=False)
 
         # Check claims in the JWT first, as it is least costly.
-        if authz.has_authz_claim(payload, authz.JWT_AUTHZ_GROUPS, dbmi_conf('AUTHZ_ADMIN_GROUP')):
+        if authz.jwt_has_authz(payload, authz.JWT_AUTHZ_GROUPS, dbmi_settings.AUTHZ_ADMIN_GROUP):
             return view(request, *args, **kwargs)
 
+        # Get their email address
+        email = authn.get_jwt_email(request, verify=False)
+
         # Now consult the AuthZ server
-        if authz.has_permission(request, payload.get('email'), authz.DBMI_ADMIN_PERMISSION):
+        if authz.has_permission(request, email, dbmi_settings.CLIENT, dbmi_settings.AUTHZ_ADMIN_PERMISSION):
             return view(request, *args, **kwargs)
 
         # Possibly store these elsewhere for records
         # TODO: Figure out a better way to flag failed access attempts
-        logger.warning('{} Failed {} permission on {}'.format(payload.get('email'),
-                                                              authz.DBMI_ADMIN_PERMISSION,
-                                                              dbmi_conf('CLIENT')))
+        logger.warning('{} Failed {} permission on {}'.format(email,
+                                                              dbmi_settings.AUTHZ_ADMIN_PERMISSION,
+                                                              dbmi_settings.CLIENT))
 
         raise PermissionDenied
 
@@ -85,77 +81,23 @@ def dbmi_group(group):
 
         def wrap(request, *args, **kwargs):
 
-            # Validates the JWT and returns its payload if valid.
-            jwt_payload = authn.validate_request(request)
-
-            # User has a valid JWT from SciAuth
-            if jwt_payload is not None:
-
-                # Get the email
-                email = jwt_payload.get('email')
-
-                # Check claims in the JWT first, as it is least costly.
-                if authz.has_authz_claim(jwt_payload, authz.JWT_AUTHZ_GROUPS, group):
-                    return view(request, *args, **kwargs)
-
-                # Possibly store these elsewhere for records
-                # TODO: Figure out a better way to flag failed access attempts
-                logger.warning('{} Failed {} group on {}'.format(email, group, dbmi_conf('CLIENT')))
-
-                # Forbid if nothing else
-                raise PermissionDenied
-
-            else:
-                logger.debug('Missing/invalid JWT, sending to login')
+            # Check for current user
+            if not request.user or not request.user.is_authenticated:
                 return authn.logout_redirect(request)
 
-        wrap.__doc__ = view.__doc__
-        wrap.__name__ = view.__name__
-        return wrap
+            # Get the payload
+            payload = authn.get_jwt_payload(request, verify=False)
 
-    return real_decorator
+            # Check claims in the JWT first, as it is least costly.
+            if authz.jwt_has_authz(payload, authz.JWT_AUTHZ_GROUPS, group):
+                return view(request, *args, **kwargs)
 
+            # Possibly store these elsewhere for records
+            # TODO: Figure out a better way to flag failed access attempts
+            logger.warning('{} Failed {} group on {}'.format(payload.get('email'), group, dbmi_settings.CLIENT))
 
-def dbmi_permission(permission):
-    '''
-    Decorator that accepts an item string that is used to retrieve
-    permissions from SciAuthZ.
-    :param permission: The permission
-    :type permission: str
-    :return: function
-    '''
-
-    def real_decorator(view):
-
-        def wrap(request, *args, **kwargs):
-
-            # Validates the JWT and returns its payload if valid.
-            jwt_payload = authn.validate_request(request)
-
-            # User has a valid JWT from SciAuth
-            if jwt_payload is not None:
-
-                # Get the email
-                email = jwt_payload.get('email')
-
-                # Check claims in the JWT first, as it is least costly.
-                if authz.has_authz_claim(jwt_payload, authz.JWT_AUTHZ_PERMISSIONS, permission):
-                    return view(request, *args, **kwargs)
-
-                # Check permission
-                if authz.has_permission(request, email, permission):
-                    return view(request, *args, **kwargs)
-
-                # Possibly store these elsewhere for records
-                # TODO: Figure out a better way to flag failed access attempts
-                logger.warning('{} Failed {} permission on {}'.format(email, permission, dbmi_conf('CLIENT')))
-
-                # Forbid if nothing else
-                raise PermissionDenied
-
-            else:
-                logger.debug('Missing/invalid JWT, sending to login')
-                return authn.logout_redirect(request)
+            # Forbid if nothing else
+            raise PermissionDenied
 
         wrap.__doc__ = view.__doc__
         wrap.__name__ = view.__name__
@@ -177,29 +119,108 @@ def dbmi_role(role):
 
         def wrap(request, *args, **kwargs):
 
-            # Validates the JWT and returns its payload if valid.
-            jwt_payload = authn.validate_request(request)
-
-            # User has a valid JWT from SciAuth
-            if jwt_payload is not None:
-
-                # Get the email
-                email = jwt_payload.get('email')
-
-                # Check claims in the JWT first, as it is least costly.
-                if authz.has_authz_claim(jwt_payload, authz.JWT_AUTHZ_ROLES, role):
-                    return view(request, *args, **kwargs)
-
-                # Possibly store these elsewhere for records
-                # TODO: Figure out a better way to flag failed access attempts
-                logger.warning('{} Failed {} role check on {}'.format(email, role, dbmi_conf('CLIENT')))
-
-                # Forbid if nothing else
-                raise PermissionDenied
-
-            else:
-                logger.debug('Missing/invalid JWT, sending to login')
+            # Check for current user
+            if not request.user or not request.user.is_authenticated:
                 return authn.logout_redirect(request)
+
+            # Get the payload
+            payload = authn.get_jwt_payload(request, verify=False)
+
+            # Check claims in the JWT first, as it is least costly.
+            if authz.jwt_has_authz(payload, authz.JWT_AUTHZ_ROLES, role):
+                return view(request, *args, **kwargs)
+
+            # Possibly store these elsewhere for records
+            # TODO: Figure out a better way to flag failed access attempts
+            logger.warning('{} Failed {} group on {}'.format(payload.get('email'), role, dbmi_settings.CLIENT))
+
+            # Forbid if nothing else
+            raise PermissionDenied
+
+        wrap.__doc__ = view.__doc__
+        wrap.__name__ = view.__name__
+        return wrap
+
+    return real_decorator
+
+
+def dbmi_app_permission(permission):
+    '''
+    Decorator that accepts an item string that is used to retrieve
+    permissions from SciAuthZ.
+    :param permission: The permission
+    :type permission: str
+    :return: function
+    '''
+
+    def real_decorator(view):
+
+        def wrap(request, *args, **kwargs):
+
+            # Check for current user
+            if not request.user or not request.user.is_authenticated:
+                return authn.logout_redirect(request)
+
+            # Get the payload
+            payload = authn.get_jwt_payload(request, verify=False)
+
+            # Check claims in the JWT first, as it is least costly.
+            if authz.jwt_has_authz(payload, authz.JWT_AUTHZ_PERMISSIONS, permission):
+                return view(request, *args, **kwargs)
+
+            # Get their email address
+            email = authn.get_jwt_email(request, verify=False)
+
+            # Check permission on the app
+            if authz.has_permission(request, email, dbmi_settings.CLIENT, permission):
+                return view(request, *args, **kwargs)
+
+            # Possibly store these elsewhere for records
+            # TODO: Figure out a better way to flag failed access attempts
+            logger.warning('{} Failed {} permission on {}'.format(email, permission, dbmi_settings.CLIENT))
+
+            # Forbid if nothing else
+            raise PermissionDenied
+
+        wrap.__doc__ = view.__doc__
+        wrap.__name__ = view.__name__
+        return wrap
+
+    return real_decorator
+
+
+def dbmi_item_permission(item, permission):
+    '''
+    Decorator that accepts an item string that is checked for the passed permission. Item is an arbitrary
+    string the application uses internally for specific or object-level permissions.
+    :param item: The item
+    :type item: str
+    :param permission: The permission
+    :type permission: str
+    :return: function
+    '''
+
+    def real_decorator(view):
+
+        def wrap(request, *args, **kwargs):
+
+            # Check for current user
+            if not request.user or not request.user.is_authenticated:
+                return authn.logout_redirect(request)
+
+            # Get their email address
+            email = authn.get_jwt_email(request, verify=False)
+
+            # Check permission
+            if authz.has_permission(request, email, item, permission):
+                return view(request, *args, **kwargs)
+
+            # Possibly store these elsewhere for records
+            # TODO: Figure out a better way to flag failed access attempts
+            logger.warning('{} Failed {} permission on {}'.format(email, permission, dbmi_settings.CLIENT))
+
+            # Forbid if nothing else
+            raise PermissionDenied
 
         wrap.__doc__ = view.__doc__
         wrap.__name__ = view.__name__

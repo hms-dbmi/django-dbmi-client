@@ -5,16 +5,80 @@ import base64
 import requests
 import jwcrypto.jwk as jwk
 
-from django.conf import settings
+from django.contrib import auth as django_auth
+from django.contrib.auth.models import AnonymousUser
+from django.core.exceptions import PermissionDenied
+from django.db.models import Q
+from django.core.exceptions import MultipleObjectsReturned
 from django.shortcuts import redirect
-from django.contrib.auth import logout
 from rest_framework.authentication import BaseAuthentication
 from rest_framework import exceptions
 
-from dbmi_client.settings import dbmi_conf
+from dbmi_client.settings import dbmi_settings
+from dbmi_client import authz
 
-import logging
-logger = logging.getLogger(__name__)
+# Get the app logger
+logger = dbmi_settings.get_logger()
+
+# Set a key to cache JWKs under in the DBMI.AUTH0 settings
+CACHED_JWKS_KEY = '__DBMI_CLIENT_CACHED_JWKS__'
+
+
+def login_redirect_url(request, next_url=None):
+    """
+    Builds and returns a URL that sends the user to the login, and returns them to the
+    supplied URL when successfully logged in. If next_url is not passed, the current URL in the
+    request will be used, so the user will return to the original location.
+    :param request: The original request object
+    :param next_url: The URL users will be sent after login
+    :return: Response
+    """
+
+    # Build the URL
+    login_url = furl(dbmi_settings.AUTHN_URL)
+    login_url.path.segments.extend(['login', 'auth'])
+
+    # Check for the next URL
+    if next_url:
+        login_url.query.params.add('next', next_url)
+
+    else:
+        login_url.query.params.add('next', request.build_absolute_uri())
+
+    # Check for branding
+    if dbmi_settings.AUTHN_TITLE or dbmi_settings.AUTHN_ICON_URL:
+
+        # Add the included parameters
+        branding = {}
+        if dbmi_settings.AUTHN_TITLE:
+            branding['title'] = dbmi_settings.AUTHN_TITLE
+
+        if dbmi_settings.AUTHN_TITLE:
+            branding['icon_url'] = dbmi_settings.AUTHN_ICON_URL
+
+        # Encode it and pass it along
+        branding_param = base64.urlsafe_b64encode(json.dumps(branding).encode('utf-8')).decode('utf-8')
+        login_url.query.params.add('branding', branding_param)
+
+    return login_url.url
+
+
+def logout_redirect(request):
+    """
+    This will log a user out and redirect them to log in again via the AuthN server.
+    :param request:
+    :return: The response object that takes the user to the login page. 'next' parameter set to bring them back to their intended page.
+    """
+    # Ensure the request is cleared of user state
+    django_auth.logout(request)
+
+    # Get a login response
+    response = redirect(login_redirect_url(request))
+
+    # Set the URL and purge cookies
+    response.delete_cookie(dbmi_settings.JWT_COOKIE_NAME, domain=dbmi_settings.JWT_COOKIE_DOMAIN)
+
+    return response
 
 
 def dbmi_http_headers(request, content_type='application/json', **kwargs):
@@ -29,7 +93,7 @@ def dbmi_http_headers(request, content_type='application/json', **kwargs):
     token = get_jwt(request)
 
     # Return headers
-    headers = {'Authorization': '{}{}'.format(dbmi_conf('JWT_HTTP_PREFIX'), token), 'Content-Type': content_type}
+    headers = {'Authorization': '{}{}'.format(dbmi_settings.JWT_HTTP_PREFIX, token), 'Content-Type': content_type}
 
     # Add any additional parameters
     headers.update(kwargs)
@@ -44,15 +108,15 @@ def get_jwt(request):
     :return: The JWT, if found
     """
     # Get the JWT token depending on request type
-    if request.COOKIES.get( dbmi_conf('JWT_COOKIE_NAME')):
-        return request.COOKIES.get(dbmi_conf('JWT_COOKIE_NAME'))
+    if hasattr(request, 'COOKIES') and request.COOKIES.get(dbmi_settings.JWT_COOKIE_NAME):
+        return request.COOKIES.get(dbmi_settings.JWT_COOKIE_NAME)
 
     # Check if JWT in HTTP Authorization header
-    elif request.META.get('HTTP_AUTHORIZATION') and dbmi_conf('JWT_HTTP_PREFIX') \
+    elif hasattr(request, 'META') and request.META.get('HTTP_AUTHORIZATION') and dbmi_settings.JWT_HTTP_PREFIX \
             in request.META.get('HTTP_AUTHORIZATION'):
 
         # Remove prefix and return the token
-        return request.META.get('HTTP_AUTHORIZATION').replace(dbmi_conf('JWT_HTTP_PREFIX'), '')
+        return request.META.get('HTTP_AUTHORIZATION').replace(dbmi_settings.JWT_HTTP_PREFIX, '')
 
     return None
 
@@ -68,6 +132,12 @@ def get_jwt_payload(request, verify=True):
 
     else:
         return validate_rs256_jwt(token)
+
+
+def get_jwt_username(request, verify=True):
+
+    # Get the payload from above
+    return get_jwt_payload(request, verify).get('sub')
 
 
 def get_jwt_email(request, verify=True):
@@ -106,22 +176,22 @@ def get_public_keys_from_auth0(refresh=False):
 
     # If refresh, delete cached key
     if refresh:
-        delattr(settings, 'AUTH0_JWKS')
+        delattr(dbmi_settings, CACHED_JWKS_KEY)
 
     try:
         # Look in settings
-        if hasattr(settings, 'AUTH0_JWKS'):
+        if hasattr(dbmi_settings, CACHED_JWKS_KEY):
             logger.debug('Using cached JWKS')
 
             # Parse the cached dict and return it
-            return json.loads(settings.AUTH0_JWKS)
+            return json.loads(getattr(dbmi_settings, CACHED_JWKS_KEY))
 
         else:
 
             logger.debug('Fetching remote JWKS')
 
             # Build the JWKs URL
-            url = furl().set(scheme='https', host=dbmi_conf('AUTH0')['DOMAIN'])
+            url = furl().set(scheme='https', host='{}.auth0.com'.format(dbmi_settings.AUTH0_TENANT))
             url.path.segments.extend(['.well-known', 'jwks.json'])
 
             # Make the request
@@ -132,18 +202,18 @@ def get_public_keys_from_auth0(refresh=False):
             jwks = response.json()
 
             # Cache it
-            setattr(settings, 'AUTH0_JWKS', json.dumps(jwks))
+            setattr(dbmi_settings, CACHED_JWKS_KEY, json.dumps(jwks))
 
             return jwks
 
     except KeyError as e:
-        logging.exception(e)
+        logger.exception(e)
 
     except json.JSONDecodeError as e:
-        logging.exception(e)
+        logger.exception(e)
 
     except requests.HTTPError as e:
-        logging.exception(e)
+        logger.exception(e)
 
     return None
 
@@ -192,7 +262,6 @@ def retrieve_public_key(jwt_string):
 
     except KeyError as e:
         logger.debug('Could not compare keys, probably old HS256 session')
-        logger.exception(e)
 
     return None
 
@@ -241,11 +310,11 @@ def validate_rs256_jwt(jwt_string):
         try:
             auth0_client_id = str(jwt.decode(jwt_string, verify=False)['aud'])
         except Exception as e:
-            logger.error('Failed to get the aud from jwt payload')
+            logger.error('Failed to get the aud from jwt payload: {}'.format(e))
             return None
 
         # Check that the Client ID is in the allowed list of Auth0 Client IDs for this application
-        if auth0_client_id not in dbmi_conf('AUTH0')['CLIENT_IDS']:
+        if not auth0_client_id == dbmi_settings.AUTH0_CLIENT_ID:
             logger.error('Auth0 Client ID not allowed')
             return None
 
@@ -259,44 +328,410 @@ def validate_rs256_jwt(jwt_string):
 
             return payload
 
-        except jwt.ExpiredSignatureError as err:
-            logger.error(str(err))
-            logger.error("JWT Expired.")
+        except jwt.ExpiredSignatureError as e:
+            logger.warning("JWT Expired: {}".format(e))
 
-        except jwt.InvalidTokenError as err:
-            logger.error(str(err))
-            logger.error("Invalid JWT Token.")
+        except jwt.InvalidTokenError as e:
+            logger.warning("Invalid JWT Token: {}".format(e))
+
+        except Exception as e:
+            logger.error("Exception: {}".format(e))
 
     return None
 
+###################################################################
+#
+# Django Custom Authentication Backends
+#
+###################################################################
 
-def logout_redirect(request):
+
+class DBMIAuthenticationBackend(object):
+
+    def authenticate(self, request, token=None):
+        """
+        All versions of this backend follow the same flow:
+        1. Check JWT is present
+        2. Check JWT validity
+        3. Check JWT payload for required user properties
+        4. Return existing user or create new one
+        5. Sync user, if already exists, with JWT payload
+        """
+        # Get the token
+        if not token:
+            token = get_jwt(request)
+            if not token:
+                return None
+
+        # Validate request
+        payload = validate_rs256_jwt(token)
+        if not payload:
+            return None
+
+        # Get their email and check for their record
+        email = payload.get('email')
+        username = payload.get('sub')
+        if not email or not username:
+            logger.error('No sub or email in valid JWT: {}'.format(payload))
+            return None
+
+        # The JWT is valid, now get the user object to attach to the request
+        user = self._get_user_object(request)
+        if not user:
+
+            # Create the user, which will also sync
+            user = self._create_user(request)
+
+        else:
+
+            # Sync the user to ensure we've got updated properties
+            self._sync_user(request, user)
+
+        return user
+
+    def get_user(self, user_id):
+        # Should be implemented by subclass depending on data source for user
+        raise SystemError('This method should not be called')
+
+    def _get_user_object(self, request):
+        """
+        Accepts details from the JWT user and returns an object representing
+        the request's user. If model is enabled, this will be an instance of User,
+        otherwise an instance of DBMIUser
+        """
+        # Should be implemented by subclass depending on data source for user
+        raise SystemError('This method should not be called')
+
+    def _create_user(self, request):
+        """
+        Called when a user in the model does not exist. This creates the user in the
+        model.
+        """
+        # Should be implemented by subclass depending on data source for user
+        raise SystemError('This method should not be called')
+
+    def _sync_user(self, request, user):
+        """
+        Called after a user is fetched/created and syncs any additional properties
+        from the JWT's payload to the user object.
+        """
+        try:
+            # Get the unverified payload
+            payload = get_jwt_payload(request, verify=False)
+
+            # Get properties
+            username = payload['sub'].lower()
+            email = payload['email'].lower()
+
+            # Check if email or username missing
+            if not user.username.lower() == username:
+                logger.debug('User\'s username did not match JWT: {} -> {}'.format(user.username, username))
+                user.username = username
+
+            if not user.email.lower() == email:
+                logger.debug('User\'s email did not match JWT: {} -> {}'.format(user.email, email))
+                user.email = email
+
+        except (KeyError, IndexError, TypeError) as e:
+            logger.exception('User syncing error: {}'.format(e), exc_info=True,
+                             extra={'user': user.id, 'request': request})
+
+
+class DBMIJWTAuthenticationBackend(DBMIAuthenticationBackend):
+
     """
-    This will log a user out and redirect them to log in again via the AuthN server.
-    :param request:
-    :return: The response object that takes the user to the login page. 'next' parameter set to bring them back to their intended page.
+    Clients must have a valid JWT in the request (either in HTTP Authorization headers or in cookies).
+    Users objects are an instance of DBMIJWTUser and mimic the properties and methods of Django's built-in
+    contrib.auth.models.User model, but with no persistence. All properties will be valid but any attempt to
+    save or link these instances to another model instance will fail.
     """
-    logout(request)
+    def _get_user_object(self, request):
+        """
+        Accepts details from the JWT user and returns an object representing
+        the request's user.
+        """
+        # Create an instance of the JWT user
+        user = DBMIJWTUser(request)
 
-    # Build the URL
-    login_url = furl(dbmi_conf('AUTHN_URL'))
-    login_url.path.segments.extend(['login', 'auth'])
-    login_url.query.params.add('next', request.build_absolute_uri())
+        # Sync their profile and return them
+        return self._sync_user(request, user)
 
-    # Check for branding
-    if dbmi_conf('AUTHN_BRANDING'):
+    def _sync_user(self, request, user):
+        """
+        Called after a user is fetched/created and syncs any additional properties
+        from the JWT's payload to the user object.
+        """
+        # The user object is built from the JWT on every request so syncing is redundant and
+        # not required.
+        pass
 
-        # Encode it and pass it
-        json_branding = json.dumps(dbmi_conf('AUTHN_BRANDING'))
-        branding = base64.urlsafe_b64encode(json_branding.encode('utf-8')).decode('utf-8')
-        login_url.query.params.add('branding', branding)
 
-    # Set the URL and purge cookies
-    response = redirect(login_url.url)
-    response.delete_cookie(dbmi_conf('JWT_COOKIE_NAME'), domain=dbmi_conf('JWT_COOKIE_DOMAIN'))
-    logger.debug('Redirecting to: {}'.format(login_url.url))
+class DBMIModelAuthenticationBackend(DBMIAuthenticationBackend):
 
-    return response
+    """
+    Clients must have a valid JWT in the request (either in HTTP Authorization headers or in cookies).
+    If enabled, users are auto-created upon first attempted login with a valid JWT. The
+    User model is keyed by the username and email contained in the JWT. Profile and groups are synced
+    from the JWT upon each login.
+    """
+
+    def user_can_authenticate(self, user):
+        """
+        Reject users with is_active=False. Custom user models that don't have
+        that attribute are allowed.
+        """
+        is_active = getattr(user, 'is_active', None)
+        return is_active or is_active is None
+
+    def get_user(self, user_id):
+        UserModel = django_auth.get_user_model()
+        try:
+            user = UserModel._default_manager.get(pk=user_id)
+
+        except UserModel.DoesNotExist:
+            return None
+
+        return user if self.user_can_authenticate(user) else None
+
+    def _get_user_object(self, request):
+        """
+        Accepts details from the JWT user and returns an object representing
+        the request's user. If model is enabled, this will be an instance of User,
+        otherwise an instance of DBMIUser
+        """
+        # Get username and email
+        username = get_jwt_username(request, verify=False)
+        email = get_jwt_email(request, verify=False)
+
+        # Fetch the current User model
+        UserModel = django_auth.get_user_model()
+        try:
+            # Find the user
+            user = UserModel.objects.get(Q(username=username) | Q(email=email))
+            logger.debug('Found user: {} : {}'.format(username, email))
+
+            return user
+
+        except MultipleObjectsReturned:
+            logger.error('Duplicate users exist for {} : {}'.format(username, email))
+
+        except UserModel.DoesNotExist:
+            logger.debug('User does not yet exist: {} : {}'.format(username, email))
+
+        return None
+
+    def _create_user(self, request):
+        """
+        Called when a user in the model does not exist. This creates the user in the
+        model.
+        """
+        # Check if autocreate is enabled
+        if not dbmi_settings.USER_MODEL_AUTOCREATE:
+            logger.debug('User autocreate is disabled, boot the current user')
+            raise PermissionDenied
+
+        # Get username and email
+        username = get_jwt_username(request, verify=False)
+        email = get_jwt_email(request, verify=False)
+
+        # Create them
+        UserModel = django_auth.get_user_model()
+        user = UserModel(username=username, email=email)
+        user.set_unusable_password()
+        logger.debug('Created user: {}:{}'.format(username, email))
+
+        # Sync them up
+        self._sync_user(request, user)
+
+        return user
+
+    def _sync_user(self, request, user):
+        """
+        Called after a user is fetched/created and syncs any additional properties
+        from the JWT's payload to the user object.
+        """
+        try:
+            # Get the unverified payload
+            payload = get_jwt_payload(request, verify=False)
+
+            # Get properties
+            username = payload['sub'].lower()
+            email = payload['email'].lower()
+
+            # Check if email or username missing
+            if not user.username.lower() == username:
+                logger.debug('User\'s username did not match JWT: {} -> {}'.format(user.username, username))
+                user.username = username
+
+            if not user.email.lower() == email:
+                logger.debug('User\'s email did not match JWT: {} -> {}'.format(user.email, email))
+                user.email = email
+
+            # Save
+            user.save()
+
+        except (KeyError, IndexError, TypeError) as e:
+            logger.exception('User syncing error: {}'.format(e), exc_info=True,
+                             extra={'user': user.id, 'request': request})
+
+
+class DBMIAdminModelAuthenticationBackend(DBMIModelAuthenticationBackend):
+
+    """
+    Clients must have a valid JWT in the request (either in HTTP Authorization headers or in cookies) as
+    well as admin authorization, either through JWT claims or as a permission in the DBMI AuthZ service.
+    Use this authentication backend for sites that are only accessible to admins and no other users.
+    User model is keyed by the username and email contained in the JWT. Profile and groups are synced
+    from the JWT upon each login.
+    """
+
+    @staticmethod
+    def _is_admin(request):
+        """
+        Performs the lookups to check for admin authorizations
+        """
+        # Get the payload
+        payload = get_jwt_payload(request, verify=False)
+        email = get_jwt_email(request, verify=False)
+
+        if not authz.jwt_has_authz(payload, authz.JWT_AUTHZ_GROUPS, dbmi_settings.AUTHZ_ADMIN_GROUP) and \
+                not authz.has_permission(request, email, dbmi_settings.CLIENT, dbmi_settings.AUTHZ_ADMIN_PERMISSION):
+            return False
+        else:
+            return True
+
+    def _create_user(self, request):
+        """
+        This middleware performs exactly like its superclass, with the exception of checking
+        an authenticated user's authorizations before creating them in the model. This would
+        be used for sites where only admins/superusers/staff should have access.
+        """
+        # Before we create a user, we must ensure they have admin authorizations
+        if not self._is_admin(request):
+            raise PermissionDenied
+
+        # Get username and email
+        username = get_jwt_username(request, verify=False)
+        email = get_jwt_email(request, verify=False)
+
+        # Create them
+        UserModel = django_auth.get_user_model()
+        user = UserModel(username=username, email=email)
+        user.set_unusable_password()
+        logger.debug('Created user: {}:{}'.format(username, email))
+
+        # Sync them up
+        self._sync_user(request, user, is_admin=True)
+
+        return user
+
+    def _sync_user(self, request, user, is_admin=None):
+        """
+        Called after a user is fetched/created and syncs any additional properties
+        from the JWT's payload to the user object. This method is extended to
+        add the flag determining admin authorization to prevent multiple
+        requests to the authz server.
+        """
+        # Do normal sync first
+        super(DBMIAdminModelAuthenticationBackend, self)._sync_user(request, user)
+
+
+class DBMISuperuserModelAuthenticationBackend(DBMIAdminModelAuthenticationBackend):
+
+    """
+    Clients must have a valid JWT in the request (either in HTTP Authorization headers or in cookies) as
+    well as admin authorization, either through JWT claims or as a permission in the DBMI AuthZ service.
+    Use this authentication backend for sites that are only accessible to admins and no other users.
+    User model is keyed by the username and email contained in the JWT. `is_staff` and `is_superuser` flags
+    are automatically set and synced on users. Every active user with authorization on this site
+    will have complete access to everything.
+    """
+
+    def _sync_user(self, request, user, is_admin=None):
+        """
+        Called after a user is fetched/created and syncs any additional properties
+        from the JWT's payload to the user object. Set staff and superuser flags
+        if authorizations are valid.
+        """
+        # Do normal sync first
+        super(DBMIAdminModelAuthenticationBackend, self)._sync_user(request, user)
+
+        # Check if admin
+        if is_admin is None:
+            is_admin = self._is_admin(request)
+
+        # Ensure the model is updated
+        user.is_staff = is_admin
+        user.is_superuser = is_admin
+        user.save()
+
+        # If not admin (indicates they used to be), save and raise exception
+        if not is_admin:
+            logger.debug('User was superuser, but is now missing authz, booting them: {}'.format(user.username))
+            raise PermissionDenied
+
+###################################################################
+#
+# Django user object for user-less databases
+#
+###################################################################
+
+
+class DBMIJWTUser(AnonymousUser):
+    """
+    This class represents a JWT user for an application that does not persist those
+    users to the store. It provides a request.user object to access user properties
+    but will throw exceptions if ever used in the context of database operations.
+    """
+    email = None
+    username = None
+    id = None
+    pk = None
+    is_active = True
+    is_staff = False
+    is_superuser = False
+
+    def __init__(self, request):
+
+        # Get the payload
+        payload = get_jwt_payload(request, verify=False)
+
+        # Set properties
+        self.username = payload.get('sub')
+        self.id = payload.get('sub')
+        self.email = payload.get('email')
+
+    def __str__(self):
+        return self.id
+
+    def __eq__(self, other):
+        return hasattr(other, 'id') and self.id == other.id
+
+    def __hash__(self):
+        return hash(self.id)
+
+    def save(self):
+        raise NotImplementedError("Django doesn't provide a DB representation for DBMIJWTUser.")
+
+    def delete(self):
+        raise NotImplementedError("Django doesn't provide a DB representation for DBMIJWTUser.")
+
+    def set_password(self, raw_password):
+        raise NotImplementedError("Django doesn't provide a DB representation for DBMIJWTUser.")
+
+    def check_password(self, raw_password):
+        raise NotImplementedError("Django doesn't provide a DB representation for DBMIJWTUser.")
+
+    @property
+    def is_anonymous(self):
+        return False
+
+    @property
+    def is_authenticated(self):
+        return True
+
+    def get_username(self):
+        return self.username
 
 ###################################################################
 #
@@ -323,4 +758,33 @@ class DBMIUser(BaseAuthentication):
 
         # Return the user's email to attach to the request object (request.user)
         # Also, return the authz dictionary contained in the JWT claims, if present (request.auth)
-        return payload.get('email'), payload.get(dbmi_conf('JWT_AUTHZ_NAMESPACE'), None)
+        return payload.get('email'), payload.get(dbmi_settings.JWT_AUTHZ_NAMESPACE)
+
+
+class DBMIModelUser(BaseAuthentication):
+    """
+    Authentication method for DBMI API methods
+    """
+    def authenticate(self, request):
+
+        # Get the JWT
+        token = get_jwt(request)
+        if not token:
+            raise exceptions.NotAuthenticated
+
+        # Call the standard Django authenticate method, that will in
+        # turn call DBMIModelAuthenticationBackend.authenticate
+        user = django_auth.authenticate(request, token=token)
+        if not user:
+            raise exceptions.AuthenticationFailed
+
+        # Check if JWT contains AuthZ
+        auth = None
+        if dbmi_settings.JWT_AUTHZ_NAMESPACE:
+
+            # User has a valid JWT from SciAuth
+            auth = get_jwt_payload(request, verify=False).get('JWT_AUTHZ_NAMESPACE')
+
+        # Return the user's email to attach to the request object (request.user)
+        # Also, return the authz dictionary contained in the JWT claims, if present (request.auth)
+        return user, auth

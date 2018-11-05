@@ -2,24 +2,21 @@ from furl import furl
 import requests
 
 from rest_framework.permissions import BasePermission
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, NotAuthenticated
 
-from dbmi_client.settings import dbmi_conf
+from dbmi_client.settings import dbmi_settings
 from dbmi_client import authn
 
-import logging
-logger = logging.getLogger(__name__)
+# Get the app logger
+logger = dbmi_settings.get_logger()
 
 # Set keys for authz dictionary
 JWT_AUTHZ_GROUPS = 'groups'
 JWT_AUTHZ_ROLES = 'roles'
 JWT_AUTHZ_PERMISSIONS = 'permissions'
 
-# We need at minimum an admin group for admin level permissions
-DBMI_ADMIN_PERMISSION = 'MANAGE'
 
-
-def has_authz_claim(claims, type, item):
+def jwt_has_authz(claims, auth_type, item):
     """
     Inspects the JWT claims for the permission. This assumed a claims dictionary is
     namespaced under DBMIAuth.dbmi_authz_namespace and 'type' is a key to a list of items
@@ -28,35 +25,56 @@ def has_authz_claim(claims, type, item):
     claims are missing, indicating the check is inconclusive and another source must
     be checked, likely DBMIAuthz.
     :param claims: The JWT claims dictionary
-    :param type: The type of authorization: group, role, permission
+    :param auth_type: The type of authorization: group, role, permission
     :param item: The specific authorization to check exists for the given type
     :return: None if not defined, bool otherwise
     """
+    try:
+        # Call the other method with the authz claims object
+        auth = claims[dbmi_settings.JWT_AUTHZ_NAMESPACE]
+        return auth_has_authz(auth, auth_type, item)
 
+    except (KeyError, IndexError, TypeError, ValueError):
+        logger.debug('No authz and/or authz type ({}) in JWT claims'.format(auth_type))
+
+    return None
+
+
+def auth_has_authz(auth, auth_type, item):
+    """
+    Inspects the DRF auth object for the permission. This assumed a claims dictionary
+    was copied from the namespaced JWT claims to the DRF auth object. See above for info
+    on authorization types contained in the JWT.
+    :param auth: The DRF auth object
+    :param auth_type: The type of authorization: group, role, permission
+    :param item: The specific authorization to check exists for the given type
+    :return: None if not defined, bool otherwise
+    """
     try:
         # Check groups
-        for _item in claims[dbmi_conf('JWT_AUTHZ_NAMESPACE')][type]:
+        for _item in auth[auth_type]:
 
             # Compare
             if _item == item:
-                logger.debug('User has authz: {} - {}'.format(type, item))
+                logger.debug('User has authz: {} - {}'.format(auth_type, item))
                 return True
 
         return False
 
-    except KeyError:
-        logger.debug('No authz and/or authz type ({}) in JWT claims'.format(type))
+    except (KeyError, IndexError, TypeError, ValueError):
+        logger.debug('No authz and/or authz type ({})'.format(auth_type))
 
-        return None
+    return None
 
 
-def has_permission(request, email, permission):
+def has_permission(request, email, item, permission):
     """
     Consults the DBMIAuthz server for authorization checks. Uses the JWT to
     authenticate the call and checks the returned permissions for the one
     specified.
     :param request: The current request containing the JWT to be checked
     :param email: The email in the JWT
+    :param item: The item string to check for the permission
     :param permission: The permission to be checked for in permissions returned from DBMIAuthz
     :return: bool
     """
@@ -64,10 +82,12 @@ def has_permission(request, email, permission):
     content = None
     try:
         # Build the request
-        url = furl(dbmi_conf('AUTHZ_URL'))
+        url = furl(dbmi_settings.AUTHZ_URL)
         url.path.segments.append('user_permission')
+        url.path.segments.append('')
         url.query.params.add('email', email)
-        url.query.params.add('item', dbmi_conf('CLIENT'))
+        url.query.params.add('item', item)
+        url.query.params.add('client', dbmi_settings.CLIENT)
 
         # Get the JWT token depending on request type
         token = authn.get_jwt(request)
@@ -75,7 +95,7 @@ def has_permission(request, email, permission):
             return False
 
         # Build headers for the SciAuthZ call
-        headers = {'Authorization': '{}{}'.format(dbmi_conf('JWT_HTTP_PREFIX'), token),
+        headers = {'Authorization': '{}{}'.format(dbmi_settings.JWT_HTTP_PREFIX, token),
                    'Content-Type': 'application/json'}
 
         # Run it
@@ -86,7 +106,7 @@ def has_permission(request, email, permission):
         # Parse permissions
         for permission_result in response.json().get('results'):
             if permission_result['permission'].lower() == permission.lower():
-                logger.debug('DBMIAuthZ: {} has {} on {}'.format(email, permission, dbmi_conf('CLIENT')))
+                logger.debug('DBMIAuthZ: {} has {} on {}'.format(email, permission, dbmi_settings.CLIENT))
                 return True
 
     except (requests.HTTPError, TypeError, KeyError):
@@ -103,7 +123,7 @@ def has_permission(request, email, permission):
 ###################################################################
 
 
-class DBMIManagePermission(BasePermission):
+class DBMIAdminPermission(BasePermission):
     """
     Permission check for MANAGE permissions on DBMI client
     """
@@ -115,14 +135,13 @@ class DBMIManagePermission(BasePermission):
             logger.warning('No \'user\' attribute on request')
             raise PermissionDenied
 
-        # Check claims in the JWT first, as it is least costly.
+        # Ensure claims are setup and then check them first, as it is least costly.
         if request.auth:
-            payload = {dbmi_conf('JWT_AUTHZ_NAMESPACE'): request.auth}
-            if has_authz_claim(payload, JWT_AUTHZ_PERMISSIONS, DBMI_ADMIN_PERMISSION):
+            if auth_has_authz(request.auth, JWT_AUTHZ_GROUPS, dbmi_settings.AUTHZ_ADMIN_GROUP):
                 return True
 
         # Check permissions
-        if has_permission(request, request.user, DBMI_ADMIN_PERMISSION):
+        if has_permission(request, request.user, dbmi_settings.CLIENT, dbmi_settings.AUTHZ_ADMIN_PERMISSION):
             return True
 
         # Possibly store these elsewhere for records
@@ -131,36 +150,29 @@ class DBMIManagePermission(BasePermission):
         raise PermissionDenied
 
 
-class DBMIManageOrOwnerPermission(BasePermission):
+class DBMIItemPermission(BasePermission):
     """
-    Permission check for owner or MANAGE permissions on DBMI 'obj'. Owner is determined
-    by comparing email in JWT with that of the email property on 'obj'
+    This permission class is meant to be inherited by clients who need to specify
+    custom item strings for their permission checks. Set the item string and the permission
+    and the base implementation will check the DBMI AuthZ server.
     """
-    message = 'User does not have proper permission on item DBMI'
 
-    def has_object_permission(self, request, view, obj):
+    # The permission item string to check
+    item = 'dbmi.item.subitem'
 
-        # Get the email of the authenticated user
+    # The permission itself the requesting user must have for this item
+    permission = 'manage'
+
+    def has_permission(self, request, view):
+
+        # Get the email
         if not hasattr(request, 'user'):
-            logger.warning('No \'user\' attribute on request')
-            raise PermissionDenied
+            logger.warning('No \'user\' (JWT email) attribute on request')
+            raise NotAuthenticated
 
-        # JWT email must be related to given object email
-        if hasattr(obj, 'email') and obj.email == request.user:
+        # Check permission server for admin permissions
+        if has_permission(request, request.user, self.item, self.permission):
             return True
-
-        # Check claims in the JWT first, as it is least costly.
-        if request.auth:
-            payload = {dbmi_conf('JWT_AUTHZ_NAMESPACE'): request.auth}
-            if has_authz_claim(payload, JWT_AUTHZ_PERMISSIONS, DBMI_ADMIN_PERMISSION):
-                return True
-
-        # Lastly, check permission server for admin permissions
-        if has_permission(request, request.user, DBMI_ADMIN_PERMISSION):
-            return True
-
-        # Possibly store these elsewhere for records
-        logger.info('{} Failed MANAGE or owner permission for DBMI'.format(request.user))
 
         raise PermissionDenied
 
@@ -176,10 +188,60 @@ class DBMIOwnerPermission(BasePermission):
         # Get the email
         if not hasattr(request, 'user'):
             logger.warning('No \'user\' (JWT email) attribute on request')
-            raise PermissionDenied
+            raise NotAuthenticated
 
-        # JWT email must be related to given object email
-        if hasattr(obj, 'email') and obj.email == request.user:
+        # Check if a key has been specified
+        key = dbmi_settings.DRF_OBJECT_OWNER_KEY
+        if key:
+
+            # Ensure the attribute exists
+            if not hasattr(obj, key):
+                logger.error('Ownership key "{}" for object "{}" does not exist'.format(key, obj))
+
+            else:
+                logger.debug('Comparing key "{}" on "{}" for ownership'.format(key, obj))
+                return getattr(obj, key) == request.user
+
+        else:
+            logger.debug('No key specified, trying attrs "email", "user" on "{}" for ownership'.format(key, obj))
+
+            # Check email attribute
+            if hasattr(obj, 'email') and obj.email == request.user:
+                return True
+
+            # Check for a user attribute
+            if hasattr(obj, 'user') and obj.user == request.user:
+                return True
+
+        raise PermissionDenied
+
+
+class DBMIAdminOrOwnerPermission(DBMIOwnerPermission):
+    """
+    Permission check for owner or MANAGE permissions on DBMI 'obj'. Owner is determined
+    by comparing email in JWT with that of the email property on 'obj'
+    """
+    message = 'User does not have proper permission on item DBMI'
+
+    def has_object_permission(self, request, view, obj):
+
+        # Check ownership first
+        try:
+            return super(DBMIAdminOrOwnerPermission, self).has_object_permission(request, view, obj)
+
+        except PermissionDenied:
+            logger.debug('Is not owner of object, checking for admin/manage...')
+
+        # Ensure claims are setup and then check them first, as it is least costly.
+        if request.auth:
+            if auth_has_authz(request.auth, JWT_AUTHZ_PERMISSIONS, dbmi_settings.AUTHZ_ADMIN_PERMISSION):
+                return True
+
+        # Lastly, check permission server for admin permissions
+        if has_permission(request, request.user, dbmi_settings.CLIENT, dbmi_settings.AUTHZ_ADMIN_PERMISSION):
             return True
+
+        # Possibly store these elsewhere for records
+        logger.info('{} Failed MANAGE or owner permission for DBMI'.format(request.user))
 
         raise PermissionDenied
