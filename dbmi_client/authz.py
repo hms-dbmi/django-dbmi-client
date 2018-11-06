@@ -116,6 +116,28 @@ def has_permission(request, email, item, permission):
     return False
 
 
+def is_admin(request, email):
+    """
+    This is just a convenience method that checks the user membership in the AUTHZ_ADMIN_GROUP, or for the
+    permission specified in settings as AUTHZ_ADMIN_PERMISSION. It will check the authorization server as
+    well as the JWT claims, if any.
+    """
+    # Check least difficult and move forward
+    if jwt_has_authz(authn.get_jwt_payload(request, verify=True),
+                     JWT_AUTHZ_GROUPS,
+                     dbmi_settings.AUTHZ_ADMIN_GROUP):
+        return True
+
+    elif jwt_has_authz(authn.get_jwt_payload(request, verify=True),
+                       JWT_AUTHZ_PERMISSIONS,
+                       dbmi_settings.AUTHZ_ADMIN_PERMISSION):
+        return True
+
+    elif has_permission(request, email, dbmi_settings.CLIENT, dbmi_settings.AUTHZ_ADMIN_PERMISSION):
+        return True
+
+    return False
+
 ###################################################################
 #
 # Django Rest Framework (DRF) Custom Authorization
