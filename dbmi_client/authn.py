@@ -134,16 +134,23 @@ def get_jwt_payload(request, verify=True):
         return validate_rs256_jwt(token)
 
 
-def get_jwt_username(request, verify=True):
+def get_jwt_value(request, key, verify=True):
 
     # Get the payload from above
-    return get_jwt_payload(request, verify).get('sub')
+    payload = get_jwt_payload(request, verify)
+    if not payload:
+        logger.debug('JWT is invalid, cannot fetch values')
+        return None
+
+    return payload.get(key)
+
+
+def get_jwt_username(request, verify=True):
+    return get_jwt_value(request, 'sub', verify)
 
 
 def get_jwt_email(request, verify=True):
-
-    # Get the payload from above
-    return get_jwt_payload(request, verify).get('email')
+    return get_jwt_value(request, 'email', verify)
 
 
 def validate_request(request):

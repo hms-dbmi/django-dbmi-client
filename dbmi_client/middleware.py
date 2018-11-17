@@ -41,13 +41,13 @@ class DBMIAuthenticationMiddleware(MiddlewareMixin):
     @staticmethod
     def get_jwt_user(request):
 
-        # Check for a token
+        # Check for a valid token
         token = authn.get_jwt(request)
-        if not token:
+        if not token or not authn.validate_rs256_jwt(token):
             return AnonymousUser()
 
         # Get their username
-        username = authn.get_jwt_username(request)
+        username = authn.get_jwt_username(request, verify=False)
 
         # Use the usual routine to get the currently cached user
         user = django_auth.get_user(request)
@@ -107,13 +107,13 @@ class DBMIJWTAuthenticationMiddleware(MiddlewareMixin):
     @staticmethod
     def get_jwt_user(request):
 
-        # Check for a token
+        # Check for a valid token
         token = authn.get_jwt(request)
-        if not token:
+        if not token or not authn.validate_rs256_jwt(token):
             return AnonymousUser()
 
         # Get their username
-        username = authn.get_jwt_username(request)
+        username = authn.get_jwt_username(request, verify=False)
 
         # Attempt to authenticate the current JWT.
         user = django_auth.authenticate(request, token=token)
