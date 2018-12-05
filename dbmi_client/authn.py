@@ -245,6 +245,9 @@ def retrieve_public_key(jwt_string):
     try:
         # Get the JWK
         jwks = get_public_keys_from_auth0(refresh=False)
+        if not jwks:
+            logger.debug('Could not fetch JWKs from Auth0, just fail out now')
+            raise PermissionDenied
 
         # Decode the JWTs header component
         unverified_header = jwt.get_unverified_header(str(jwt_string))
