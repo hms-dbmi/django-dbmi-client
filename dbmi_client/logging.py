@@ -32,6 +32,11 @@ def config(service, sentry=True):
                 'level': 'WARNING',
                 'propagate': True,
             },
+            'django.request': {
+                'handlers': ['console'],
+                'level': 'ERROR',
+                'propagate': True,
+            },
         },
     }
 

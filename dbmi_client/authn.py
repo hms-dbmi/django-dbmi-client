@@ -597,34 +597,19 @@ class DBMIAdminModelAuthenticationBackend(DBMIModelAuthenticationBackend):
     from the JWT upon each login.
     """
 
-    @staticmethod
-    def _is_admin(request):
-        """
-        Performs the lookups to check for admin authorizations
-        """
-        # Get the payload
-        payload = get_jwt_payload(request, verify=False)
-        email = get_jwt_email(request, verify=False)
-
-        if not authz.jwt_has_authz(payload, authz.JWT_AUTHZ_GROUPS, dbmi_settings.AUTHZ_ADMIN_GROUP) and \
-                not authz.has_permission(request, email, dbmi_settings.CLIENT, dbmi_settings.AUTHZ_ADMIN_PERMISSION):
-            return False
-        else:
-            return True
-
     def _create_user(self, request):
         """
         This middleware performs exactly like its superclass, with the exception of checking
         an authenticated user's authorizations before creating them in the model. This would
         be used for sites where only admins/superusers/staff should have access.
         """
-        # Before we create a user, we must ensure they have admin authorizations
-        if not self._is_admin(request):
-            raise PermissionDenied
-
         # Get username and email
         username = get_jwt_username(request, verify=False)
         email = get_jwt_email(request, verify=False)
+
+        # Before we create a user, we must ensure they have admin authorizations
+        if not authz.is_admin(request, email):
+            raise PermissionDenied
 
         # Create them
         UserModel = django_auth.get_user_model()

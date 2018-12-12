@@ -199,6 +199,21 @@ class DBMIItemPermission(BasePermission):
         raise PermissionDenied
 
 
+class DBMIUserPermission(BasePermission):
+    """
+    Custom permission to only any authenticated user access.
+    """
+
+    def has_object_permission(self, request, view, obj):
+
+        # Get the email
+        if not hasattr(request, 'user'):
+            logger.warning('No \'user\' (JWT email) attribute on request')
+            raise NotAuthenticated
+
+        return True
+
+
 class DBMIOwnerPermission(BasePermission):
     """
     Object-level permission to only allow owners of an object to edit it.
