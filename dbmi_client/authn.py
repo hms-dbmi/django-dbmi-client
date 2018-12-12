@@ -655,7 +655,7 @@ class DBMISuperuserModelAuthenticationBackend(DBMIAdminModelAuthenticationBacken
 
         # Check if admin
         if is_admin is None:
-            is_admin = self._is_admin(request)
+            is_admin = authz.is_admin(request, user.email)
 
         # Ensure the model is updated
         user.is_staff = is_admin
