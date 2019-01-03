@@ -63,17 +63,18 @@ def login_redirect_url(request, next_url=None):
     return login_url.url
 
 
-def logout_redirect(request):
+def logout_redirect(request, next_url=None):
     """
     This will log a user out and redirect them to log in again via the AuthN server.
-    :param request:
+    :param request: The Django request object
+    :param next_url: A URL that the user should be sent to should they log back in
     :return: The response object that takes the user to the login page. 'next' parameter set to bring them back to their intended page.
     """
     # Ensure the request is cleared of user state
     django_auth.logout(request)
 
     # Get a login response
-    response = redirect(login_redirect_url(request))
+    response = redirect(login_redirect_url(request, next_url))
 
     # Set the URL and purge cookies
     response.delete_cookie(dbmi_settings.JWT_COOKIE_NAME, domain=dbmi_settings.JWT_COOKIE_DOMAIN)
