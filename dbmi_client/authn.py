@@ -63,17 +63,18 @@ def login_redirect_url(request, next_url=None):
     return login_url.url
 
 
-def logout_redirect(request):
+def logout_redirect(request, next_url=None):
     """
     This will log a user out and redirect them to log in again via the AuthN server.
-    :param request:
+    :param request: The Django request object
+    :param next_url: A URL that the user should be sent to should they log back in
     :return: The response object that takes the user to the login page. 'next' parameter set to bring them back to their intended page.
     """
     # Ensure the request is cleared of user state
     django_auth.logout(request)
 
     # Get a login response
-    response = redirect(login_redirect_url(request))
+    response = redirect(login_redirect_url(request, next_url))
 
     # Set the URL and purge cookies
     response.delete_cookie(dbmi_settings.JWT_COOKIE_NAME, domain=dbmi_settings.JWT_COOKIE_DOMAIN)
@@ -245,6 +246,9 @@ def retrieve_public_key(jwt_string):
     try:
         # Get the JWK
         jwks = get_public_keys_from_auth0(refresh=False)
+        if not jwks:
+            logger.debug('Could not fetch JWKs from Auth0, just fail out now')
+            raise PermissionDenied
 
         # Decode the JWTs header component
         unverified_header = jwt.get_unverified_header(str(jwt_string))
@@ -594,34 +598,19 @@ class DBMIAdminModelAuthenticationBackend(DBMIModelAuthenticationBackend):
     from the JWT upon each login.
     """
 
-    @staticmethod
-    def _is_admin(request):
-        """
-        Performs the lookups to check for admin authorizations
-        """
-        # Get the payload
-        payload = get_jwt_payload(request, verify=False)
-        email = get_jwt_email(request, verify=False)
-
-        if not authz.jwt_has_authz(payload, authz.JWT_AUTHZ_GROUPS, dbmi_settings.AUTHZ_ADMIN_GROUP) and \
-                not authz.has_permission(request, email, dbmi_settings.CLIENT, dbmi_settings.AUTHZ_ADMIN_PERMISSION):
-            return False
-        else:
-            return True
-
     def _create_user(self, request):
         """
         This middleware performs exactly like its superclass, with the exception of checking
         an authenticated user's authorizations before creating them in the model. This would
         be used for sites where only admins/superusers/staff should have access.
         """
-        # Before we create a user, we must ensure they have admin authorizations
-        if not self._is_admin(request):
-            raise PermissionDenied
-
         # Get username and email
         username = get_jwt_username(request, verify=False)
         email = get_jwt_email(request, verify=False)
+
+        # Before we create a user, we must ensure they have admin authorizations
+        if not authz.is_admin(request, email):
+            raise PermissionDenied
 
         # Create them
         UserModel = django_auth.get_user_model()
@@ -667,7 +656,7 @@ class DBMISuperuserModelAuthenticationBackend(DBMIAdminModelAuthenticationBacken
 
         # Check if admin
         if is_admin is None:
-            is_admin = self._is_admin(request)
+            is_admin = authz.is_admin(request, user.email)
 
         # Ensure the model is updated
         user.is_staff = is_admin
