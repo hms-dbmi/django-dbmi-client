@@ -479,6 +479,48 @@ class DBMIJWTAuthenticationBackend(DBMIAuthenticationBackend):
         pass
 
 
+class DBMIJWTAdminAuthenticationBackend(DBMIAuthenticationBackend):
+
+    """
+    Clients must have a valid JWT in the request (either in HTTP Authorization headers or in cookies).
+    Users objects are an instance of DBMIJWTUser and mimic the properties and methods of Django's built-in
+    contrib.auth.models.User model, but with no persistence. All properties will be valid but any attempt to
+    save or link these instances to another model instance will fail. DBMI AuthZ is consulted for staff/superuser
+    access and the User object is prepared as such.
+    """
+    def _get_user_object(self, request):
+        """
+        Accepts details from the JWT user and returns an object representing
+        the request's user.
+        """
+        # Create an instance of the JWT user
+        user = DBMIJWTUser(request)
+
+        # Sync their profile and return them
+        self._sync_user(request, user)
+
+        return user
+
+    def _sync_user(self, request, user):
+        """
+        Called after a user is fetched/created and syncs any additional properties
+        from the JWT's payload to the user object.
+        """
+        # All sync admin/superuser status
+        try:
+            # Check if admin/superuser
+            if authz.is_admin(request, user.email):
+                user.is_staff = True
+                user.is_superuser = True
+            else:
+                user.is_staff = False
+                user.is_superuser = False
+
+        except (KeyError, IndexError, TypeError) as e:
+            logger.exception('User syncing error: {}'.format(e), exc_info=True,
+                             extra={'user': user.id, 'request': request})
+
+
 class DBMIModelAuthenticationBackend(DBMIAuthenticationBackend):
 
     """
