@@ -184,12 +184,12 @@ def get_public_keys_from_auth0(refresh=False):
 
     # If refresh, delete cached key
     if refresh:
+        logger.debug('Refresh requested, deleting cached JWKs')
         delattr(dbmi_settings, CACHED_JWKS_KEY)
 
     try:
         # Look in settings
         if hasattr(dbmi_settings, CACHED_JWKS_KEY):
-            logger.debug('Using cached JWKS')
 
             # Parse the cached dict and return it
             return json.loads(getattr(dbmi_settings, CACHED_JWKS_KEY))
@@ -267,12 +267,15 @@ def retrieve_public_key(jwt_string):
             # Try it again
             rsa_key = get_rsa_from_jwks(jwks, unverified_header['kid'])
             if not rsa_key:
-                logger.error('No matching key found despite refresh, failing')
+                logger.warning('Invalid JWT attempt', extra={
+                    'unverified_kid': unverified_header['kid'], 'jwt': jwt_string,
+                })
+                raise PermissionDenied
 
         return rsa_key
 
     except KeyError as e:
-        logger.debug('Could not compare keys, probably old HS256 session')
+        logger.debug('Could not compare keys, probably old HS256 session: {}'.format(e))
 
     return None
 
