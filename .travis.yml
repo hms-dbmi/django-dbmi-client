@@ -1,0 +1,15 @@
+language: python
+python:
+- '3.6'
+branches:
+  only:
+  - master
+install:
+- python setup.py -q install
+script:
+  - echo "Hello"
+after_success:
+- git config --global user.name "semantic-release (via TravisCI)"
+- git config --global user.email "semantic-release@travis"
+- pip install python-semantic-release
+- semantic-release publish
