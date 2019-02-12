@@ -184,12 +184,12 @@ def get_public_keys_from_auth0(refresh=False):
 
     # If refresh, delete cached key
     if refresh:
+        logger.debug('Refresh requested, deleting cached JWKs')
         delattr(dbmi_settings, CACHED_JWKS_KEY)
 
     try:
         # Look in settings
         if hasattr(dbmi_settings, CACHED_JWKS_KEY):
-            logger.debug('Using cached JWKS')
 
             # Parse the cached dict and return it
             return json.loads(getattr(dbmi_settings, CACHED_JWKS_KEY))
@@ -267,12 +267,15 @@ def retrieve_public_key(jwt_string):
             # Try it again
             rsa_key = get_rsa_from_jwks(jwks, unverified_header['kid'])
             if not rsa_key:
-                logger.error('No matching key found despite refresh, failing')
+                logger.warning('Invalid JWT attempt', extra={
+                    'unverified_kid': unverified_header['kid'], 'jwt': jwt_string,
+                })
+                raise PermissionDenied
 
         return rsa_key
 
     except KeyError as e:
-        logger.debug('Could not compare keys, probably old HS256 session')
+        logger.debug('Could not compare keys, probably old HS256 session: {}'.format(e))
 
     return None
 
@@ -477,6 +480,48 @@ class DBMIJWTAuthenticationBackend(DBMIAuthenticationBackend):
         # The user object is built from the JWT on every request so syncing is redundant and
         # not required.
         pass
+
+
+class DBMIJWTAdminAuthenticationBackend(DBMIAuthenticationBackend):
+
+    """
+    Clients must have a valid JWT in the request (either in HTTP Authorization headers or in cookies).
+    Users objects are an instance of DBMIJWTUser and mimic the properties and methods of Django's built-in
+    contrib.auth.models.User model, but with no persistence. All properties will be valid but any attempt to
+    save or link these instances to another model instance will fail. DBMI AuthZ is consulted for staff/superuser
+    access and the User object is prepared as such.
+    """
+    def _get_user_object(self, request):
+        """
+        Accepts details from the JWT user and returns an object representing
+        the request's user.
+        """
+        # Create an instance of the JWT user
+        user = DBMIJWTUser(request)
+
+        # Sync their profile and return them
+        self._sync_user(request, user)
+
+        return user
+
+    def _sync_user(self, request, user):
+        """
+        Called after a user is fetched/created and syncs any additional properties
+        from the JWT's payload to the user object.
+        """
+        # All sync admin/superuser status
+        try:
+            # Check if admin/superuser
+            if authz.is_admin(request, user.email):
+                user.is_staff = True
+                user.is_superuser = True
+            else:
+                user.is_staff = False
+                user.is_superuser = False
+
+        except (KeyError, IndexError, TypeError) as e:
+            logger.exception('User syncing error: {}'.format(e), exc_info=True,
+                             extra={'user': user.id, 'request': request})
 
 
 class DBMIModelAuthenticationBackend(DBMIAuthenticationBackend):
