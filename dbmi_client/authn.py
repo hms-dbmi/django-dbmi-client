@@ -633,6 +633,36 @@ class DBMIModelAuthenticationBackend(DBMIAuthenticationBackend):
                              extra={'user': user.id, 'request': request})
 
 
+class DBMIUsersModelAuthenticationBackend(DBMIModelAuthenticationBackend):
+
+    """
+    Clients must have a valid JWT in the request (either in HTTP Authorization headers or in cookies).
+    Use this authentication backend for sites that are accessible to all users as well as administrator users.
+    User model is keyed by the username and email contained in the JWT. `is_staff` and `is_superuser` flags
+    are automatically set and synced on appropriate users. Every active user with admin authorization on this site
+    will have complete access to everything.
+    """
+
+    def _sync_user(self, request, user):
+        """
+        Called after a user is fetched/created and syncs any additional properties
+        from the JWT's payload to the user object. Set staff and superuser flags
+        if authorizations are valid.
+        """
+        # Do normal sync first
+        super(DBMIModelAuthenticationBackend, self)._sync_user(request, user)
+
+        # Check if admin
+        is_admin = authz.is_admin(request, user.email)
+        if is_admin:
+            logger.debug(f'User: {user.email} has been granted admin/superuser privileges')
+
+        # Ensure the model is updated
+        user.is_staff = is_admin
+        user.is_superuser = is_admin
+        user.save()
+
+
 class DBMIAdminModelAuthenticationBackend(DBMIModelAuthenticationBackend):
 
     """
