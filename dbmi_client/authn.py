@@ -5,12 +5,13 @@ import base64
 import requests
 import jwcrypto.jwk as jwk
 
+from django.apps import apps
 from django.contrib import auth as django_auth
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import PermissionDenied
 from django.db.models import Q
 from django.core.exceptions import MultipleObjectsReturned
-from django.shortcuts import redirect
+from django.shortcuts import redirect, reverse
 from rest_framework.authentication import BaseAuthentication
 from rest_framework import exceptions
 
@@ -33,17 +34,24 @@ def login_redirect_url(request, next_url=None):
     :param next_url: The URL users will be sent after login
     :return: Response
     """
+    # Check for local login enabled
+    if apps.is_installed('dbmi_client.login'):
 
-    # Build the URL
-    login_url = furl(dbmi_settings.AUTHN_URL)
-    login_url.path.segments.extend(['login', 'auth'])
+        # Use local login URL
+        login_url = furl(request.build_absolute_uri(reverse('dbmi_login:login')))
+
+    else:
+
+        # Build the URL using DBMI-AuthN
+        login_url = furl(dbmi_settings.AUTHN_URL)
+        login_url.path.segments.extend(['login', 'auth'])
 
     # Check for the next URL
     if next_url:
-        login_url.query.params.add('next', next_url)
+        login_url.query.params.add(dbmi_settings.LOGIN_REDIRECT_KEY, next_url)
 
     else:
-        login_url.query.params.add('next', request.build_absolute_uri())
+        login_url.query.params.add(dbmi_settings.LOGIN_REDIRECT_KEY, request.build_absolute_uri())
 
     # Check for branding
     if dbmi_settings.AUTHN_TITLE or dbmi_settings.AUTHN_ICON_URL:

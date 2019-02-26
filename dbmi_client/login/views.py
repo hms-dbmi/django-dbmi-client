@@ -38,12 +38,19 @@ def login(request):
 
     # Check for an existing valid DBMI JWT
     if validate_request(request):
-        logger.debug("Logged in, forward along.")
 
-        if hasattr(dbmi_settings, 'LOGIN_REDIRECT_URL'):
+        # Determine where to send them
+        if hasattr(dbmi_settings, 'LOGIN_REDIRECT_KEY') and request.GET.get(dbmi_settings.LOGIN_REDIRECT_KEY):
             redirect_url = request.GET.get(dbmi_settings.LOGIN_REDIRECT_KEY)
+
+        elif hasattr(dbmi_settings, 'LOGIN_REDIRECT_URL'):
+            redirect_url = dbmi_settings.LOGIN_REDIRECT_URL
+
         else:
             redirect_url = request.build_absolute_uri(reverse('dbmi_login:jwt'))
+
+        # Log their next destination
+        logger.debug(f'Logged in, forward user to: {redirect_url}')
 
         return redirect(redirect_url)
 
@@ -149,8 +156,12 @@ def callback(request):
     if email and jwt:
 
         # Redirect the user to the page they originally requested.
-        if hasattr(dbmi_settings, 'LOGIN_REDIRECT_URL'):
+        if hasattr(dbmi_settings, 'LOGIN_REDIRECT_KEY') and query.get(dbmi_settings.LOGIN_REDIRECT_KEY):
             redirect_url = query.get(dbmi_settings.LOGIN_REDIRECT_KEY)
+
+        elif hasattr(dbmi_settings, 'LOGIN_REDIRECT_URL'):
+            redirect_url = dbmi_settings.LOGIN_REDIRECT_URL
+
         else:
             redirect_url = request.build_absolute_uri(reverse('dbmi_login:jwt'))
 
