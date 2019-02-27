@@ -19,7 +19,8 @@ from dbmi_client.settings import dbmi_settings
 from dbmi_client import authz
 
 # Get the app logger
-logger = dbmi_settings.get_logger()
+import logging
+logger = logging.getLogger(dbmi_settings.LOGGER_NAME)
 
 # Set a key to cache JWKs under in the DBMI.AUTH0 settings
 CACHED_JWKS_KEY = '__DBMI_CLIENT_CACHED_JWKS__'

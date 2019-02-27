@@ -9,7 +9,8 @@ from dbmi_client.settings import dbmi_settings
 from dbmi_client.authn import validate_request, get_jwt
 
 # Get the logger
-logger = dbmi_settings.get_logger()
+import logging
+logger = logging.getLogger(dbmi_settings.LOGGER_NAME)
 
 
 def token(request):
