@@ -335,16 +335,15 @@ def validate_rs256_jwt(jwt_string):
         jwt_client_id = str(jwt.decode(jwt_string, verify=False)['aud'])
 
         # Check that the Client ID is in Auth0 clients, if specified
-        if hasattr(dbmi_settings, 'AUTH0_CLIENTS'):
+        if hasattr(dbmi_settings, 'AUTH0_CLIENTS') and getattr(dbmi_settings, 'AUTH0_CLIENTS'):
 
             # Search client IDs
-            for tenant, client in dbmi_settings.AUTH0_CLIENTS.items():
-                if jwt_client_id == client.get('id'):
-                    logger.debug(f'JWT Client ID matched to tenant: {tenant}')
+            tenant = dbmi_settings.AUTH0_CLIENTS.get(jwt_client_id, {}).get('tenant')
+            if tenant:
+                logger.debug(f'JWT Client ID matched to tenant: {tenant}')
 
-                    # Get the public key
-                    jwk_pub_key = retrieve_public_key(tenant, jwt_string)
-                    break
+                # Get the public key
+                jwk_pub_key = retrieve_public_key(tenant, jwt_string)
 
             # Log if not found
             else:

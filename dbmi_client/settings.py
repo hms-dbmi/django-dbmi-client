@@ -87,7 +87,7 @@ CONFIG_DEFAULTS = {
 
     # Logout settings
     'LOGOUT_REDIRECT_KEY': 'next',  # The query parameter key specifying where logged out users should be sent
-    'LOGOUT_REDIRECT_URL': '/',  # The post-logout URL to send users to if not specified by 'LOGOUT_REDIRECT_KEY'
+    'LOGOUT_REDIRECT_URL': None,  # The post-logout URL to send users to if not specified by 'LOGOUT_REDIRECT_KEY'
 
     # Auth0 clients
     'AUTH0_CLIENTS': None,  # Use this dictionary to specify multiple auth0 tenant: {client ID, secret} configs
