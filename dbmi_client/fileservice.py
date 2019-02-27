@@ -9,7 +9,7 @@ from dbmi_client.settings import dbmi_settings
 from dbmi_client import authn
 
 import logging
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(dbmi_settings.LOGGER_NAME)
 
 
 # Set the possible permissions

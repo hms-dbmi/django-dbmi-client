@@ -48,7 +48,9 @@ CONFIG_DEFAULTS = {
     'JWT_AUTHZ_NAMESPACE': None,
 
     # Optionally disable logging
+    'LOGGER_NAME': 'dbmi_client',
     'ENABLE_LOGGING': True,
+    'LOG_LEVEL': logging.WARNING,
 
     # Universal login screen branding
     'AUTHN_TITLE': 'DBMI Client',
@@ -266,6 +268,11 @@ class DBMISettings(object):
 
 # Create the instance by which the settings should be accessed
 dbmi_settings = DBMISettings(CONFIG_DEFAULTS)
+
+# Configure logging
+logger = logging.getLogger(dbmi_settings.LOGGER_NAME)
+logger.disabled = not dbmi_settings.ENABLE_LOGGING
+logger.setLevel(dbmi_settings.LOG_LEVEL)
 
 
 def reload_dbmi_settings(*args, **kwargs):
