@@ -84,6 +84,13 @@ CONFIG_DEFAULTS = {
     # Login settings
     'LOGIN_REDIRECT_KEY': 'next',  # The query parameter key specifying where logged in users should be sent
     'LOGIN_REDIRECT_URL': '/',  # The post-login URL to send users to if not specified by 'LOGIN_REDIRECT_KEY'
+
+    # Logout settings
+    'LOGOUT_REDIRECT_KEY': 'next',  # The query parameter key specifying where logged out users should be sent
+    'LOGOUT_REDIRECT_URL': '/',  # The post-logout URL to send users to if not specified by 'LOGOUT_REDIRECT_KEY'
+
+    # Auth0 clients
+    'AUTH0_CLIENTS': None,  # Use this dictionary to specify multiple auth0 tenant: {client ID, secret} configs
 }
 
 # List of settings that cannot be defaulted and must be user-defined
@@ -240,6 +247,7 @@ class DBMISettings(object):
 
             # Else, return true if the client has added either backend classes to AUTHENTICATION_BACKENDS
             return 'dbmi_client.authn.DBMIModelAuthenticationBackend' in settings.AUTHENTICATION_BACKENDS or \
+                   'dbmi_client.authn.DBMIUsersModelAuthenticationBackend' in settings.AUTHENTICATION_BACKENDS or \
                    'dbmi_client.authn.DBMIAdminModelAuthenticationBackend' in settings.AUTHENTICATION_BACKENDS
 
     def get_logger(self):
