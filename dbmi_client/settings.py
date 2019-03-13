@@ -72,6 +72,12 @@ CONFIG_DEFAULTS = {
     'AUTH0_TENANT': None,
     'AUTH0_SCOPE': 'openid email',
 
+    # Auth0 clients
+    'AUTH0_CLIENTS': None,  # Use this dictionary to specify multiple auth0 tenant: {client ID, secret} configs
+
+    # Auth0 tenants
+    'AUTH0_TENANTS': None,  # Use this list to specify Auth0 tenants whose clients should be considered valid here
+
     # Configurations surrounding usage of a local Django user model
     'USER_MODEL_ENABLED': False,
     'USER_MODEL_AUTOCREATE': True,
@@ -90,9 +96,6 @@ CONFIG_DEFAULTS = {
     # Logout settings
     'LOGOUT_REDIRECT_KEY': 'next',  # The query parameter key specifying where logged out users should be sent
     'LOGOUT_REDIRECT_URL': None,  # The post-logout URL to send users to if not specified by 'LOGOUT_REDIRECT_KEY'
-
-    # Auth0 clients
-    'AUTH0_CLIENTS': None,  # Use this dictionary to specify multiple auth0 tenant: {client ID, secret} configs
 }
 
 # List of settings that cannot be defaulted and must be user-defined
@@ -174,8 +177,20 @@ class DBMISettings(object):
         if 'CLIENT' not in user_settings:
             raise AttributeError('CLIENT configuration must be set')
 
-        if 'AUTH0_TENANT' not in user_settings or 'AUTH0_CLIENT_ID' not in user_settings:
-            raise AttributeError('AUTH0_TENANT and AUTH0_CLIENT_ID configurations must be set')
+        # Check possible Auth0 configurations (single client, multiple clients, multiple tenants)
+        if ('AUTH0_TENANT' not in user_settings or 'AUTH0_CLIENT_ID' not in user_settings) \
+                and 'AUTH0_TENANTS' not in user_settings \
+                and 'AUTH0_CLIENTS' not in user_settings:
+            raise AttributeError('One of AUTH0_TENANT/AUTH0_CLIENT_ID, AUTH0_CLIENTS or '
+                                 'AUTH0_TENANTS configurations must be set')
+
+        # If Auth0 login enabled, ensure we've got needed Auth0 configurations
+        if 'dbmi_client.login' in settings.INSTALLED_APPS \
+            and ('AUTH0_TENANT' not in user_settings
+                 or 'AUTH0_CLIENT_ID' not in user_settings
+                 or 'AUTH0_SECRET' not in user_settings):
+            raise AttributeError('AUTH0_TENANT/AUTH0_CLIENT_ID/AUTH0_SECRET must be specified for '
+                                 'the "dbmi_client.login" app to function')
 
         # Ensure environment is set and if not prod or dev, ensure service URLs are provided
         if 'ENVIRONMENT' in user_settings and \
@@ -273,6 +288,10 @@ dbmi_settings = DBMISettings(CONFIG_DEFAULTS)
 logger = logging.getLogger(dbmi_settings.LOGGER_NAME)
 logger.disabled = not dbmi_settings.ENABLE_LOGGING
 logger.setLevel(dbmi_settings.LOG_LEVEL)
+
+# Set the sentry client if Raven is used
+if 'raven.contrib.django.raven_compat' in settings.INSTALLED_APPS:
+    setattr(settings, 'SENTRY_CLIENT', 'dbmi_client.sentry.DBMISentryClient')
 
 
 def reload_dbmi_settings(*args, **kwargs):

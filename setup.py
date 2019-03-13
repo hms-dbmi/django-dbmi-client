@@ -36,6 +36,7 @@ setup(
         "furl",
         "pyjwt",
         "django-bootstrap3",
+        "raven>=6.9.0",
     ],
     include_package_data=True,
     classifiers=[

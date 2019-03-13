@@ -177,12 +177,33 @@ def validate_request(request):
 
     # Extract JWT token into a string.
     jwt_string = get_jwt(request)
+    algorithm = None
 
-    # Check that we actually have a token.
-    if jwt_string is not None:
-        return validate_rs256_jwt(jwt_string)
-    else:
+    # Ensure JWT exists
+    if not jwt_string:
         return None
+
+    # Determine which Auth0 Client ID (aud) this JWT pertains to.
+    try:
+        unverified_header = jwt.get_unverified_header(str(jwt_string))
+        algorithm = unverified_header.get('alg', 'rs256').lower()
+
+        # Check algorithm
+        if algorithm == 'hs256':
+            return validate_hs256_jwt(jwt_string)
+
+        elif algorithm == 'rs256':
+            return validate_rs256_jwt(jwt_string)
+
+        else:
+            logger.error(f'Unsupported JWT algorithm: {algorithm}')
+            return None
+
+    except Exception as e:
+        logger.exception('Validate error: {}'.format(e), exc_info=True,
+                         extra={'algorithm': algorithm})
+
+    return None
 
 
 def get_public_keys_from_auth0(tenant, refresh=False):
@@ -228,13 +249,13 @@ def get_public_keys_from_auth0(tenant, refresh=False):
             return jwks
 
     except KeyError as e:
-        logger.exception(e)
+        logger.exception(f'Error getting public keys: {e}', exc_info=True, extra={'tenant': tenant})
 
     except json.JSONDecodeError as e:
-        logger.exception(e)
+        logger.exception(f'Error getting public keys: {e}', exc_info=True, extra={'tenant': tenant})
 
     except requests.HTTPError as e:
-        logger.exception(e)
+        logger.exception(f'Error getting public keys: {e}', exc_info=True, extra={'tenant': tenant})
 
     return None
 
@@ -262,7 +283,7 @@ def retrieve_public_key(tenant, jwt_string):
         jwks = get_public_keys_from_auth0(tenant, refresh=False)
         if not jwks:
             logger.debug('Could not fetch JWKs from Auth0, just fail out now')
-            raise PermissionDenied
+            return None
 
         # Decode the JWTs header component
         unverified_header = jwt.get_unverified_header(str(jwt_string))
@@ -281,15 +302,13 @@ def retrieve_public_key(tenant, jwt_string):
             # Try it again
             rsa_key = get_rsa_from_jwks(jwks, unverified_header['kid'])
             if not rsa_key:
-                logger.warning('Invalid JWT attempt', extra={
-                    'unverified_kid': unverified_header['kid'], 'jwt': jwt_string,
-                })
-                raise PermissionDenied
+                logger.warning('Invalid JWT attempt', extra={'unverified_kid': unverified_header['kid']})
+                return None
 
         return rsa_key
 
     except KeyError as e:
-        logger.debug('Could not compare keys, probably old HS256 session: {}'.format(e))
+        logger.exception('Error retrieving public keys: {}'.format(e), exc_info=True, extra={'tenant': tenant})
 
     return None
 
@@ -335,7 +354,7 @@ def validate_rs256_jwt(jwt_string):
     try:
         jwt_client_id = str(jwt.decode(jwt_string, verify=False)['aud'])
 
-        # Check that the Client ID is in Auth0 clients, if specified
+        # Check if multiple clients are specified at the client level
         if hasattr(dbmi_settings, 'AUTH0_CLIENTS') and getattr(dbmi_settings, 'AUTH0_CLIENTS'):
 
             # Search client IDs
@@ -348,7 +367,26 @@ def validate_rs256_jwt(jwt_string):
 
             # Log if not found
             else:
-                logger.debug(f'JWT Client ID is not in AUTH0_CLIENTS: {jwt_client_id}')
+                logger.info(f'JWT client {jwt_client_id} could not be matched to any clients')
+
+        # Check for multiple clients at the tenant level
+        elif hasattr(dbmi_settings, 'AUTH0_TENANTS') and getattr(dbmi_settings, 'AUTH0_TENANTS'):
+
+            # Try each one
+            for tenant in dbmi_settings.AUTH0_TENANTS:
+                try:
+                    # Get the public key
+                    jwk_pub_key = retrieve_public_key(tenant, jwt_string)
+
+                    # A public key was returned, we've got a JWT from this tenant
+                    if jwk_pub_key:
+                        break
+
+                except PermissionDenied:
+                    pass
+            else:
+                logger.info(f'JWT client {jwt_client_id} could not be matched to '
+                            f'any tenants: {dbmi_settings.AUTH0_TENANTS}')
 
         # If not already matched, try default client
         if not jwk_pub_key and jwt_client_id == dbmi_settings.AUTH0_CLIENT_ID:
@@ -361,9 +399,8 @@ def validate_rs256_jwt(jwt_string):
             return None
 
     except Exception as e:
-        logger.exception(f'Failed to get the aud from jwt payload: {e}', exc_info=True, extra={
-            'jwt_client_id': jwt_client_id, 'jwk_pub_key': jwk_pub_key
-        })
+        logger.exception(f'Failed to get the aud from jwt payload: {e}', exc_info=True,
+                         extra={'jwt_client_id': jwt_client_id, 'jwk_pub_key': jwk_pub_key})
         return None
 
     # Attempt to validate with each one
@@ -388,7 +425,7 @@ def validate_rs256_jwt(jwt_string):
             })
 
         except jwt.InvalidTokenError as e:
-            logger.warning("Invalid JWT Token: {}".format(e), extra={
+            logger.info("Invalid JWT Token: {}".format(e), extra={
                 'jwt_client_id': jwt_client_id, 'jwk_pub_key': jwk_pub_key
             })
 
@@ -396,6 +433,51 @@ def validate_rs256_jwt(jwt_string):
             logger.exception(f'Error validating JWT: {e}', exc_info=True, extra={
                 'jwt_client_id': jwt_client_id, 'jwk_pub_key': jwk_pub_key
             })
+
+    return None
+
+
+def validate_hs256_jwt(jwt_string):
+    '''
+    Verifies the given HS256 JWT. Returns the payload
+    if verified, otherwise returns None.
+    :param jwt_string: JWT as a string
+    :return: dict
+    '''
+
+    # Check settings for proper setup
+    if not dbmi_settings.AUTH0_SECRET or not dbmi_settings.AUTH0_CLIENT_ID:
+        logger.error('Cannot verify HS256 tokens without client ID and client secret')
+        raise PermissionDenied
+
+    # Determine which Auth0 Client ID (aud) this JWT pertains to.
+    jwt_client_id = None
+    try:
+        jwt_client_id = str(jwt.decode(jwt_string, verify=False)['aud'])
+
+        # Perform the validation
+        payload = jwt.decode(jwt_string,
+                             base64.b64decode(dbmi_settings.AUTH0_SECRET, '-_'),
+                             algorithms=['HS256'],
+                             leeway=120,
+                             audience=jwt_client_id)
+
+        return payload
+
+    except jwt.ExpiredSignatureError as e:
+        logger.debug("JWT Expired: {}".format(e), extra={
+            'jwt_client_id': jwt_client_id,
+        })
+
+    except jwt.InvalidTokenError as e:
+        logger.info("Invalid JWT Token: {}".format(e), extra={
+            'jwt_client_id': jwt_client_id,
+        })
+
+    except Exception as e:
+        logger.exception(f'Error validating JWT: {e}', exc_info=True, extra={
+            'jwt_client_id': jwt_client_id,
+        })
 
     return None
 
