@@ -54,8 +54,9 @@ def login_redirect_url(request, next_url=None):
     else:
         login_url.query.params.add(dbmi_settings.LOGIN_REDIRECT_KEY, request.build_absolute_uri())
 
-    # Add the default client ID
-    login_url.query.params.add('client_id', dbmi_settings.AUTH0_CLIENT_ID)
+    # Add the default client ID, if specified
+    if hasattr(dbmi_settings, 'AUTH0_CLIENT_ID') and getattr(dbmi_settings, 'AUTH0_CLIENT_ID'):
+        login_url.query.params.add('client_id', dbmi_settings.AUTH0_CLIENT_ID)
 
     # Check for branding
     if dbmi_settings.AUTHN_TITLE or dbmi_settings.AUTHN_ICON_URL:
@@ -370,7 +371,7 @@ def validate_rs256_jwt(jwt_string):
                 logger.info(f'JWT client {jwt_client_id} could not be matched to any clients')
 
         # Check for multiple clients at the tenant level
-        elif hasattr(dbmi_settings, 'AUTH0_TENANTS') and getattr(dbmi_settings, 'AUTH0_TENANTS'):
+        if not jwk_pub_key and hasattr(dbmi_settings, 'AUTH0_TENANTS') and getattr(dbmi_settings, 'AUTH0_TENANTS'):
 
             # Try each one
             for tenant in dbmi_settings.AUTH0_TENANTS:
@@ -394,7 +395,7 @@ def validate_rs256_jwt(jwt_string):
             # Get the public key
             jwk_pub_key = retrieve_public_key(dbmi_settings.AUTH0_TENANT, jwt_string)
 
-        elif not jwk_pub_key:
+        if not jwk_pub_key:
             logger.error(f'JWT Client ID could not be matched: {jwt_client_id}')
             return None
 

@@ -45,7 +45,6 @@ CONFIG_DEFAULTS = {
     'AUTHN_URL': None,
     'AUTHZ_URL': None,
     'REG_URL': None,
-    'JWT_AUTHZ_NAMESPACE': None,
 
     # Optionally disable logging
     'LOGGER_NAME': 'dbmi_client',
@@ -62,6 +61,7 @@ CONFIG_DEFAULTS = {
     'AUTHZ_USER_GROUP': 'dbmi-user',
 
     # JWT bits
+    'JWT_AUTHZ_NAMESPACE': None,
     'JWT_HTTP_PREFIX': 'JWT ',
     'JWT_COOKIE_NAME': 'DBMI_JWT',
     'JWT_COOKIE_DOMAIN': '.dbmi.hms.harvard.edu',
