@@ -11,7 +11,8 @@ from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import PermissionDenied
 from django.db.models import Q
 from django.core.exceptions import MultipleObjectsReturned
-from django.shortcuts import redirect, reverse
+from django.shortcuts import redirect
+from django.urls import reverse
 from rest_framework.authentication import BaseAuthentication
 from rest_framework import exceptions
 
@@ -24,6 +25,41 @@ logger = logging.getLogger(dbmi_settings.LOGGER_NAME)
 
 # Set a key to cache JWKs under in the DBMI.AUTH0 settings
 CACHED_JWKS_KEY = '__DBMI_CLIENT_CACHED_JWKS__'
+
+
+def login(request):
+    """
+    Builds and returns a redirect response to allow the user to login and send them to the
+    supplied URL when successfully logged in. If not defined in LOGIN_REDIRECT_URL, the
+    current URL in the request will be used, so the user will return to the original location.
+    :param request: The original request object
+    :return: The redirect response
+    """
+    return login_redirect(request)
+
+
+def login_redirect(request, next_url=None):
+    """
+    Builds and returns a redirect response to allow the user to login and send them to the
+    supplied URL when successfully logged in. If next_url is not passed, and
+    it is not defined in LOGIN_REDIRECT_URL, the current URL in the request will be used,
+    so the user will return to the original location.
+    :param request: The original request object
+    :param next_url: The URL users will be sent after login
+    :return: Response
+    """
+
+    # Ensure the request is cleared of user state
+    django_auth.logout(request)
+
+    # Get the url
+    login_url = login_redirect_url(request, next_url)
+
+    # Just process the logout and redirect them
+    response = redirect(login_url)
+
+    # Do needed logout functions and return the modified response
+    return response
 
 
 def login_redirect_url(request, next_url=None):
@@ -47,12 +83,17 @@ def login_redirect_url(request, next_url=None):
         login_url = furl(dbmi_settings.AUTHN_URL)
         login_url.path.segments.extend(['login', 'auth'])
 
-    # Check for the next URL
-    if next_url:
-        login_url.query.params.add(dbmi_settings.LOGIN_REDIRECT_KEY, next_url)
+    # If no next URL, determine where to dump them after logout
+    if not next_url:
+        if dbmi_settings.LOGIN_REDIRECT_URL:
+            next_url = request.build_absolute_uri(dbmi_settings.LOGIN_REDIRECT_URL)
 
-    else:
-        login_url.query.params.add(dbmi_settings.LOGIN_REDIRECT_KEY, request.build_absolute_uri())
+        else:
+            next_url = request.build_absolute_uri()
+
+    # Add next url
+    logger.debug('Login next URL: {}'.format(next_url))
+    login_url.query.params.add(dbmi_settings.LOGIN_REDIRECT_KEY, next_url)
 
     # Add the default client ID, if specified
     if hasattr(dbmi_settings, 'AUTH0_CLIENT_ID') and getattr(dbmi_settings, 'AUTH0_CLIENT_ID'):
@@ -73,26 +114,90 @@ def login_redirect_url(request, next_url=None):
         branding_param = base64.urlsafe_b64encode(json.dumps(branding).encode('utf-8')).decode('utf-8')
         login_url.query.params.add('branding', branding_param)
 
+    logger.debug('Login URL: {}'.format(login_url.url))
     return login_url.url
+
+
+def logout(request):
+    """
+    This will prepare the redirect to log the user out (either internally or at DBMI-AuthN)
+    :param request: The Django request object
+    :return: The response object that takes the user to the logout endpoint
+    """
+    # Call logout redirect
+    return logout_redirect(request)
 
 
 def logout_redirect(request, next_url=None):
     """
-    This will log a user out and redirect them to log in again via the AuthN server.
-    :param request: The Django request object
-    :param next_url: A URL that the user should be sent to should they log back in
-    :return: The response object that takes the user to the login page. 'next' parameter set to bring them back to their intended page.
+    This is just an alias for `logout` to support older clients
     """
     # Ensure the request is cleared of user state
     django_auth.logout(request)
 
-    # Get a login response
-    response = redirect(login_redirect_url(request, next_url))
+    # Build the logout URL
+    logout_url = logout_redirect_url(request, next_url)
 
-    # Set the URL and purge cookies
-    response.delete_cookie(dbmi_settings.JWT_COOKIE_NAME, domain=dbmi_settings.JWT_COOKIE_DOMAIN)
+    # Just process the logout and redirect them
+    response = redirect(logout_url)
 
+    # Do needed logout functions and return the modified response
     return response
+
+
+def logout_redirect_url(request, next_url=None):
+    """
+    This will prepare the redirect URL to log the user out (either internally or at DBMI-AuthN)
+    :param request: The Django request object
+    :param next_url: A URL that the user should be sent to should they log back in
+    :return: The response object that takes the user to the logout endpoint
+    """
+    # Check for local login enabled
+    if apps.is_installed('dbmi_client.login'):
+
+        # Build the URL to DBMI-Client's logout page
+        logout_url = furl(request.build_absolute_uri(reverse('dbmi_login:logout')))
+
+    else:
+
+        # Build the URL to DBMI-AuthN's logout endpoint
+        logout_url = furl(dbmi_settings.AUTHN_URL)
+        logout_url.path.segments.extend(['logout'])
+
+    # If no next URL, determine where to dump them after logout
+    if not next_url:
+        if dbmi_settings.LOGOUT_REDIRECT_URL:
+            next_url = request.build_absolute_uri(dbmi_settings.LOGOUT_REDIRECT_URL)
+
+        else:
+            next_url = request.build_absolute_uri()
+
+    logger.debug('Logout next URL: {}'.format(next_url))
+
+    # Add next url
+    logout_url.query.params.add(dbmi_settings.LOGOUT_REDIRECT_KEY, next_url)
+
+    # Add the default client ID, if specified
+    if hasattr(dbmi_settings, 'AUTH0_CLIENT_ID') and getattr(dbmi_settings, 'AUTH0_CLIENT_ID'):
+        logout_url.query.params.add('client_id', dbmi_settings.AUTH0_CLIENT_ID)
+
+    # Check for branding
+    if dbmi_settings.AUTHN_TITLE or dbmi_settings.AUTHN_ICON_URL:
+
+        # Add the included parameters
+        branding = {}
+        if dbmi_settings.AUTHN_TITLE:
+            branding['title'] = dbmi_settings.AUTHN_TITLE
+
+        if dbmi_settings.AUTHN_TITLE:
+            branding['icon_url'] = dbmi_settings.AUTHN_ICON_URL
+
+        # Encode it and pass it along
+        branding_param = base64.urlsafe_b64encode(json.dumps(branding).encode('utf-8')).decode('utf-8')
+        logout_url.query.params.add('branding', branding_param)
+
+    logger.debug('Logout URL: {}'.format(logout_url.url))
+    return logout_url.url
 
 
 def dbmi_http_headers(request, content_type='application/json', **kwargs):

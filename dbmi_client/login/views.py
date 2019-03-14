@@ -7,6 +7,7 @@ from django.shortcuts import render, redirect, reverse
 from django.http import HttpResponse, QueryDict
 from dbmi_client.settings import dbmi_settings
 from dbmi_client.authn import validate_request, get_jwt
+from django.contrib import auth as django_auth
 
 # Get the logger
 import logging
@@ -177,3 +178,55 @@ def callback(request):
     else:
         logger.error("No email/jwt returned for user info, cannot proceed", exc_info=True, extra={'user_info': user_info})
         return HttpResponse(status=500)
+
+
+def logout(request):
+    """
+    User logout
+
+    This endpoint logs out the user session from the dbmi_authn Django app.
+    """
+    # See if they are logged in
+    if validate_request(request):
+
+        # Build the logout URL
+        url = furl.furl(f'https://{dbmi_settings.AUTH0_TENANT}.auth0.com/v2/logout')
+
+        # Add the client ID
+        url.query.params.add('client_id', dbmi_settings.AUTH0_CLIENT_ID)
+
+        # Look for next url
+        if request.GET.get(dbmi_settings.LOGOUT_REDIRECT_KEY):
+
+            # Get the passed URL
+            next_url = request.GET.get(dbmi_settings.LOGOUT_REDIRECT_KEY)
+            logger.debug('Will log user out and redirect to: {}'.format(next_url))
+
+            # Redirect the user
+            url.query.params.set('returnTo', next_url)
+
+        else:
+            logger.debug('Will log user out and redirect to log out page')
+
+            # Redirect the user to the landing page
+            url.query.params.set('returnTo', request.build_absolute_uri(reverse('dbmi_login:logout')))
+
+        # Log the URL
+        logger.debug(f'Logout URL: {url.url}')
+
+        # Ensure the request is cleared of user state
+        django_auth.logout(request)
+
+        # Create the response
+        response = redirect(url.url)
+
+        # Set the URL and purge cookies
+        response.delete_cookie(dbmi_settings.JWT_COOKIE_NAME, domain=dbmi_settings.JWT_COOKIE_DOMAIN)
+
+        return response
+
+    else:
+        logger.debug('User has been logged out, sending to logout page')
+
+        # Render the logout landing page
+        return render(request, 'dbmi_client/login/logout.html')

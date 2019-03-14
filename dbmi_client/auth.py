@@ -22,7 +22,7 @@ def dbmi_user(view):
 
         # Check for current user
         if not request.user or not request.user.is_authenticated:
-            return authn.logout_redirect(request)
+            return authn.login_redirect(request)
 
         # Let it go
         return view(request, *args, **kwargs)
@@ -42,7 +42,7 @@ def dbmi_admin(view):
 
         # Check for current user
         if not request.user or not request.user.is_authenticated:
-            return authn.logout_redirect(request)
+            return authn.login_redirect(request)
 
         # Get the payload
         payload = authn.get_jwt_payload(request, verify=False)
@@ -84,7 +84,7 @@ def dbmi_group(group):
 
             # Check for current user
             if not request.user or not request.user.is_authenticated:
-                return authn.logout_redirect(request)
+                return authn.login_redirect(request)
 
             # Get the payload
             payload = authn.get_jwt_payload(request, verify=False)
@@ -122,7 +122,7 @@ def dbmi_role(role):
 
             # Check for current user
             if not request.user or not request.user.is_authenticated:
-                return authn.logout_redirect(request)
+                return authn.login_redirect(request)
 
             # Get the payload
             payload = authn.get_jwt_payload(request, verify=False)
@@ -160,7 +160,7 @@ def dbmi_app_permission(permission):
 
             # Check for current user
             if not request.user or not request.user.is_authenticated:
-                return authn.logout_redirect(request)
+                return authn.login_redirect(request)
 
             # Get the payload
             payload = authn.get_jwt_payload(request, verify=False)
@@ -207,7 +207,7 @@ def dbmi_item_permission(item, permission):
 
             # Check for current user
             if not request.user or not request.user.is_authenticated:
-                return authn.logout_redirect(request)
+                return authn.login_redirect(request)
 
             # Get their email address
             email = authn.get_jwt_email(request, verify=False)

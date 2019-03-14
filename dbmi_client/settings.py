@@ -91,7 +91,7 @@ CONFIG_DEFAULTS = {
 
     # Login settings
     'LOGIN_REDIRECT_KEY': 'next',  # The query parameter key specifying where logged in users should be sent
-    'LOGIN_REDIRECT_URL': '/',  # The post-login URL to send users to if not specified by 'LOGIN_REDIRECT_KEY'
+    'LOGIN_REDIRECT_URL': None,  # The post-login URL to send users to if not specified by 'LOGIN_REDIRECT_KEY'
 
     # Logout settings
     'LOGOUT_REDIRECT_KEY': 'next',  # The query parameter key specifying where logged out users should be sent
