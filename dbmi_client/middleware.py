@@ -89,6 +89,71 @@ class DBMIAuthenticationMiddleware(MiddlewareMixin):
         return user
 
 
+class DBMIHybridAuthenticationMiddleware(DBMIAuthenticationMiddleware):
+    """
+    Before loading cached user objects, we want to double-check the JWT to:
+    1. Ensure it exists still
+    2. Ensure it belongs to the currently cached user
+    If any of the above do not pass, do the logout routine
+
+    This middleware is a hybrid of purely JWT authentication and session authentication. The
+    initial authentication is performed by inspecting the JWT and then loading/creating the user.
+    That user's pk is cached exactly how normal session auth works, and is then consulted from there
+    on out to load that user to each request. Once the session expires, the JWT is then looked at
+    again to provide authentication. Also, the JWT is still consulted on every request to make sure
+    the current user is matched to the current JWT. This check is simply comparing the JWT username/email
+    to that of the user instance. If a user session exists and the JWT was swapped for some reason,
+    this will detect that change and invalidate the current user session and require another initial
+    authentication process.
+
+    When you would use this middleware: This is ideal for instances in which the authentication process
+    does some heavy or involved work. If authenticating depends on requests being made to the authorization
+    server or resources being pulled from remote sources, this work would be done for every single request,
+    and would not be ideal. Doing it upon first auth, and then using the session to determine if the user
+    is current or not, minimizes that work, but still ensures JWT defines authentication state.
+    """
+
+    def process_request(self, request):
+        request.user = SimpleLazyObject(lambda: self.__class__.get_jwt_user(request))
+
+    @staticmethod
+    def get_jwt_user(request):
+
+        # Use super's implementation
+        user = super(DBMIHybridAuthenticationMiddleware).get_jwt_user(request)
+        if user:
+
+            # Check if they've been granted admin level privileges
+            if user.is_staff or user.is_superuser:
+
+                # Get details
+                token = authn.get_jwt(request)
+                username = authn.get_jwt_username(request, verify=False)
+                email = authn.get_jwt_email(request, verify=False)
+
+                logger.debug(f'User "{username}":"{email}" is currently admin; rerunning sync...')
+
+                # Run their sync again to make absolutely sure they're still an admin
+                user = django_auth.authenticate(request, token=token)
+                if user and user.is_authenticated:
+                    logger.debug('User has re-authenticated: {}'.format(username))
+
+                    # Store this user in session
+                    django_auth.login(request, user)
+
+                    # Check updated status
+                    if user.is_superuser or user.is_staff:
+                        logger.debug(f'User "{username}":"{email}" is still admin')
+
+                else:
+                    logger.debug('User could not be authenticated: {}'.format(username))
+                    # Whatever token this user has, it's not valid OR their account would/could not
+                    # be created, deny permission. This will likely be the case for instances where
+                    # automatic user creation is disabled and a user with a valid JWT is not being
+                    # granted an account.
+                    raise PermissionDenied
+
+
 class DBMIJWTAuthenticationMiddleware(MiddlewareMixin):
     """
     This middleware does not use any user caching at all. For every request, the JWT, if present, is
