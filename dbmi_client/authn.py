@@ -162,7 +162,7 @@ def logout_redirect_url(request, next_url=None):
 
         # Build the URL to DBMI-AuthN's logout endpoint
         logout_url = furl(dbmi_settings.AUTHN_URL)
-        logout_url.path.segments.extend(['logout'])
+        logout_url.path.segments.extend(['login', 'logout'])
 
     # If no next URL, determine where to dump them after logout
     if not next_url:
@@ -961,7 +961,7 @@ class DBMISuperuserModelAuthenticationBackend(DBMIAdminModelAuthenticationBacken
         if authorizations are valid.
         """
         # Do normal sync first
-        super(DBMIAdminModelAuthenticationBackend, self)._sync_user(request, user)
+        super(DBMISuperuserModelAuthenticationBackend, self)._sync_user(request, user)
 
         # Check if admin
         if is_admin is None:

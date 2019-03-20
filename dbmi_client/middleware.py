@@ -89,11 +89,12 @@ class DBMIAuthenticationMiddleware(MiddlewareMixin):
         return user
 
 
-class DBMIHybridAuthenticationMiddleware(DBMIAuthenticationMiddleware):
+class DBMIUsersAuthenticationMiddleware(DBMIAuthenticationMiddleware):
     """
     Before loading cached user objects, we want to double-check the JWT to:
     1. Ensure it exists still
-    2. Ensure it belongs to the currently cached user
+    2. Ensure it belongs to the currently cached user.
+    3. If the cached user is an admin, confirm their permissions by re-running login and authorization sync.
     If any of the above do not pass, do the logout routine
 
     This middleware is a hybrid of purely JWT authentication and session authentication. The
@@ -106,11 +107,19 @@ class DBMIHybridAuthenticationMiddleware(DBMIAuthenticationMiddleware):
     this will detect that change and invalidate the current user session and require another initial
     authentication process.
 
+    What sets this middelware apart from `DBMIAuthenticationMiddleware` is admin users are checked
+    with every request to ensure permissions are up-to-date. The additional overhead might be considered
+    appropriate to ensure changes to administrator permissions are checked with every request to prevent
+    a cached user to have elevated permissions after those permissions might have been revoked at the
+    authorization server. Normal users are cached and fetched normally and this do not impose the
+    additional overhead of double-checking status.
+
     When you would use this middleware: This is ideal for instances in which the authentication process
-    does some heavy or involved work. If authenticating depends on requests being made to the authorization
-    server or resources being pulled from remote sources, this work would be done for every single request,
-    and would not be ideal. Doing it upon first auth, and then using the session to determine if the user
-    is current or not, minimizes that work, but still ensures JWT defines authentication state.
+    does some heavy or involved work, but admins should be confirmed on every request, no matter what.
+    If authenticating depends on requests being made to the authorization server or resources being pulled
+    from remote sources, this work would be done for every single request, and would not be ideal. Doing
+    it upon first auth, and then using the session to determine if the user is current or not, minimizes
+    that work, but still ensures JWT defines authentication state.
     """
 
     def process_request(self, request):
@@ -120,7 +129,7 @@ class DBMIHybridAuthenticationMiddleware(DBMIAuthenticationMiddleware):
     def get_jwt_user(request):
 
         # Use super's implementation
-        user = super(DBMIHybridAuthenticationMiddleware).get_jwt_user(request)
+        user = super(DBMIUsersAuthenticationMiddleware).get_jwt_user(request)
         if user:
 
             # Check if they've been granted admin level privileges
@@ -152,6 +161,8 @@ class DBMIHybridAuthenticationMiddleware(DBMIAuthenticationMiddleware):
                     # automatic user creation is disabled and a user with a valid JWT is not being
                     # granted an account.
                     raise PermissionDenied
+
+        return user
 
 
 class DBMIJWTAuthenticationMiddleware(MiddlewareMixin):
