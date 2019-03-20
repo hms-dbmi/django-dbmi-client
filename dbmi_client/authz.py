@@ -30,6 +30,11 @@ def jwt_has_authz(claims, auth_type, item):
     :param item: The specific authorization to check exists for the given type
     :return: None if not defined, bool otherwise
     """
+    # Check if enabled
+    if not dbmi_settings.JWT_AUTHZ_NAMESPACE:
+        logger.debug('JWT_AUTHZ_NAMESPACE is not defined, JWT AuthZ checks are disabled')
+        return None
+
     try:
         # Call the other method with the authz claims object
         auth = claims[dbmi_settings.JWT_AUTHZ_NAMESPACE]
