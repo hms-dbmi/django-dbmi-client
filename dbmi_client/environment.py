@@ -15,14 +15,18 @@ def get_int(name, default=0, required=False):
     Return default if value does not exist or fails to parse.
     """
     if name not in os.environ:
-        return default
+        if required:
+            raise SystemError(f'ENV: Required parameter {name} could not be found')
+        else:
+            logger.error('ENV: Nothing found for: {}'.format(name))
+            return default
 
     try:
         value = os.environ.get(name, default)
         return int(value)
     except ValueError:
         if required:
-            raise SystemError(f'ENV: Required parameter {name} could not be found')
+            raise SystemError(f'ENV: Required parameter {name} could not be parsed')
         else:
             logger.error('ENV: Non-numeric type found for: {}'.format(name))
             return default
