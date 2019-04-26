@@ -1,7 +1,6 @@
 import os
 import re
 from io import open
-
 from setuptools import find_packages, setup
 
 
@@ -27,17 +26,9 @@ setup(
     author_email='dbmi-tech-core@hms.harvard.edu',
     packages=find_packages(exclude=['tests*']),
     license='Creative Commons Attribution-Noncommercial-Share Alike license',
-    install_requires=[
-        'django>=1.11',
-        'djangorestframework',
-        'cryptography',
-        'requests',
-        "jwcrypto",
-        "furl",
-        "pyjwt",
-        "django-bootstrap3",
-        "raven>=6.9.0",
-    ],
+    install_requires=read('requirements.txt').splitlines(),
+    tests_require=read('requirements-test.txt').splitlines(),
+    test_suite='dbmi_client.tests.runtests.main',
     include_package_data=True,
     classifiers=[
         'Environment :: Web Environment',

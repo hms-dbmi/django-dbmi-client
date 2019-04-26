@@ -1,3 +1,4 @@
+dist: xenial
 language: python
 python:
 - '3.6'
@@ -6,8 +7,9 @@ branches:
   - master
 install:
 - python setup.py -q install
+- pip install -r requirements-test.txt
 script:
-  - echo "Hello"
+- python setup.py test
 after_success:
 - git config --global user.name "semantic-release (via TravisCI)"
 - git config --global user.email "semantic-release@travis"

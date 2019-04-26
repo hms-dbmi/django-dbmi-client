@@ -1,0 +1,9 @@
+django>=1.11
+djangorestframework
+cryptography
+requests
+jwcrypto
+furl
+pyjwt
+django-bootstrap3
+raven>=6.9.0
