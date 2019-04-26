@@ -3,4 +3,3 @@ coverage
 mock
 responses
 django-coverage
-django-setuptest
