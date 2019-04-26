@@ -73,7 +73,7 @@ def auth_has_authz(auth, auth_type, item):
     return None
 
 
-def has_permission(request, email, item, permission):
+def has_permission(request, email, item, permission, check_parents=False):
     """
     Consults the DBMIAuthz server for authorization checks. Uses the JWT to
     authenticate the call and checks the returned permissions for the one
@@ -82,6 +82,7 @@ def has_permission(request, email, item, permission):
     :param email: The email in the JWT
     :param item: The item string to check for the permission
     :param permission: The permission to be checked for in permissions returned from DBMIAuthz
+    :param check_parents: For every item, also attempt to match parents for the given permission
     :return: bool
     """
     url = None
@@ -92,8 +93,11 @@ def has_permission(request, email, item, permission):
         url.path.segments.append('user_permission')
         url.path.segments.append('')
         url.query.params.add('email', email)
-        url.query.params.add('item', item)
         url.query.params.add('client', dbmi_settings.CLIENT)
+
+        # If we are searching parents, we need to fetch all permissions for this user
+        if not check_parents:
+            url.query.params.add('item', item)
 
         # Get the JWT token depending on request type
         token = authn.get_jwt(request)
@@ -109,15 +113,104 @@ def has_permission(request, email, item, permission):
         content = response.content
         response.raise_for_status()
 
+        # If checking parents...
+        if check_parents and len(item.split('.')) > 1:
+
+            # ... build list of all parent paths
+            components = item.lower().split('.')
+            items = ['.'.join(components[:i+1]) for i in range(len(components))]
+
+        else:
+
+            # Set the single item list to search
+            items = [item.lower()]
+
         # Parse permissions
         for permission_result in response.json().get('results'):
-            if permission_result['permission'].lower() == permission.lower():
-                logger.debug('DBMIAuthZ: {} has {} on {}'.format(email, permission, dbmi_settings.CLIENT))
+
+            # Get the items
+            _item = permission_result['item'].lower()
+            _permission = permission_result['permission'].lower()
+
+            # Check it
+            if _item in items and _permission == permission.lower():
+                logger.debug('DBMIAuthZ: {} has {} on {}'.format(email, permission, item))
                 return True
 
     except (requests.HTTPError, TypeError, KeyError):
         logger.error('SciAuthZ permission lookup failed', exc_info=True, extra={
             'request': request, 'email': email, 'permission': permission, 'url': url, 'content': content})
+
+    return False
+
+
+def has_a_permission(request, email, item, permissions, check_parents=False):
+    """
+    Consults the DBMIAuthz server for authorization checks. Uses the JWT to
+    authenticate the call and checks the returned permissions for the one
+    specified.
+    :param request: The current request containing the JWT to be checked
+    :param email: The email in the JWT
+    :param item: The item string to check for the permission
+    :param permissions: A list of permissions
+    :param check_parents: For every item, also attempt to match parents for the given permission
+    :return: bool
+    """
+    url = None
+    content = None
+    try:
+        # Build the request
+        url = furl(dbmi_settings.AUTHZ_URL)
+        url.path.segments.append('user_permission')
+        url.path.segments.append('')
+        url.query.params.add('email', email)
+        url.query.params.add('client', dbmi_settings.CLIENT)
+
+        # If we are searching parents, we need to fetch all permissions for this user
+        if not check_parents:
+            url.query.params.add('item', item)
+
+        # Get the JWT token depending on request type
+        token = authn.get_jwt(request)
+        if not token:
+            return False
+
+        # Build headers for the SciAuthZ call
+        headers = {'Authorization': '{}{}'.format(dbmi_settings.JWT_HTTP_PREFIX, token),
+                   'Content-Type': 'application/json'}
+
+        # Run it
+        response = requests.get(url.url, headers=headers)
+        content = response.content
+        response.raise_for_status()
+
+        # If checking parents...
+        if check_parents and len(item.split('.')) > 1:
+
+            # ... build list of all parent paths
+            components = item.lower().split('.')
+            items = ['.'.join(components[:i+1]) for i in range(len(components))]
+
+        else:
+
+            # Set the single item list to search
+            items = [item.lower()]
+
+        # Parse permissions
+        for permission_result in response.json().get('results'):
+
+            # Get the items
+            item = permission_result['item'].lower()
+            permission = permission_result['permission'].lower()
+
+            # Check it
+            if item in items and permission in map(str.lower, permissions):
+                logger.debug('DBMIAuthZ: {} has {} on {}'.format(email, permission, item))
+                return True
+
+    except (requests.HTTPError, TypeError, KeyError):
+        logger.error('SciAuthZ permission lookup failed', exc_info=True, extra={
+            'request': request, 'email': email, 'permissions': permissions, 'url': url, 'content': content})
 
     return False
 
