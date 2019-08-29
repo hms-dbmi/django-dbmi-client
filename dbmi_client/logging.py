@@ -2,7 +2,7 @@ import sys
 import logging
 
 
-def config(service, sentry=True):
+def config(service, sentry=True, root_level=logging.WARNING):
 
     # Set the standard configurations
     config = {
@@ -24,7 +24,7 @@ def config(service, sentry=True):
         },
         'root': {
             'handlers': ['console'],
-            'level': 'DEBUG',
+            'level': logging.getLevelName(root_level),
         },
         'loggers': {
             'django': {
