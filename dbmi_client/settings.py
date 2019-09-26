@@ -45,6 +45,7 @@ CONFIG_DEFAULTS = {
     'AUTHN_URL': None,
     'AUTHZ_URL': None,
     'REG_URL': None,
+    'FILESERVICE_URL': None,
 
     # Optionally disable logging
     'LOGGER_NAME': 'dbmi_client',
@@ -86,8 +87,10 @@ CONFIG_DEFAULTS = {
     'DRF_OBJECT_OWNER_KEY': 'user',
 
     # Filservice
+    'FILESERVICE_TOKEN': None,  # The authentication token to be used with Fileservice
     'FILESERVICE_BUCKETS': [],  # The name of the S3 buckets Fileservice should use
     'FILESERVICE_GROUP': None,  # Typically would be the same as CLIENT
+    'FILESERVICE_ADMINS': [],  # A list of Fileservice users and/or user emails that should administer group
 
     # Login settings
     'LOGIN_REDIRECT_KEY': 'next',  # The query parameter key specifying where logged in users should be sent
@@ -221,6 +224,24 @@ class DBMISettings(object):
                     missing_urls.append('REG_URL')
             if missing_urls:
                 raise AttributeError('{} configuration(s) must be set'.format(missing_urls))
+
+            if 'FILESERVICE_URL' not in user_settings:
+                # Check environment
+                if os.environ.get('DBMI_FILESERVICE_URL'):
+                    user_settings['FILESERVICE_URL'] = os.environ.get('DBMI_FILESERVICE_URL')
+                else:
+                    warnings.warn("FILESERVICE_URL is not set, Fileservice requests will fail", ResourceWarning)
+
+            if ('FILESERVICE_GROUP' in user_settings or
+                'FILESERVICE_BUCKETS' in user_settings or
+                'FILESERVICE_ADMINS' in user_settings or
+                'FILESERVICE_TOKEN' in user_settings) and \
+                    ('FILESERVICE_GROUP' not in user_settings or
+                     'FILESERVICE_BUCKETS' not in user_settings or
+                     'FILESERVICE_ADMINS' not in user_settings or
+                     'FILESERVICE_TOKEN' not in user_settings):
+                    warnings.warn("FILESERVICE_GROUP, FILESERVICE_BUCKETS, FILESERVICE_ADMINS and FILESERVICE_TOKEN must be "
+                                  "defined for Fileservice usage", ResourceWarning)
 
             if 'JWT_AUTHZ_NAMESPACE' not in user_settings:
                 warnings.warn(
