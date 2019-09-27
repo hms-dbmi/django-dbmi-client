@@ -133,7 +133,8 @@ class DBMISettings(object):
 
                 # Update the client config with pre-defined environment URLs, etc
                 if user_settings.get('ENVIRONMENT') in DBMI_ENVIRONMENTS:
-                    user_settings.update(DBMI_ENVIRONMENTS[user_settings.get('ENVIRONMENT')])
+                    env_settings = DBMI_ENVIRONMENTS[user_settings.get('ENVIRONMENT')]
+                    user_settings.update({k: v for k, v in env_settings.items() if k not in user_settings})
 
                 else:
                     # Check for them in environment
