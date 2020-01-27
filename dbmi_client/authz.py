@@ -73,12 +73,12 @@ def auth_has_authz(auth, auth_type, item):
     return None
 
 
-def has_permission(request, email, item, permission, check_parents=False):
+def has_permission(request_or_jwt, email, item, permission, check_parents=False):
     """
     Consults the DBMIAuthz server for authorization checks. Uses the JWT to
     authenticate the call and checks the returned permissions for the one
     specified.
-    :param request: The current request containing the JWT to be checked
+    :param request_or_jwt: The current request containing the JWT to be checked or the JWT itself
     :param email: The email in the JWT
     :param item: The item string to check for the permission
     :param permission: The permission to be checked for in permissions returned from DBMIAuthz
@@ -100,7 +100,12 @@ def has_permission(request, email, item, permission, check_parents=False):
             url.query.params.add('item', item)
 
         # Get the JWT token depending on request type
-        token = authn.get_jwt(request)
+        if type(request_or_jwt) is str:
+            token = request_or_jwt
+        else:
+            token = authn.get_jwt(request_or_jwt)
+
+        # Ensure we've got a token
         if not token:
             return False
 
@@ -139,17 +144,17 @@ def has_permission(request, email, item, permission, check_parents=False):
 
     except (requests.HTTPError, TypeError, KeyError):
         logger.error('SciAuthZ permission lookup failed', exc_info=True, extra={
-            'request': request, 'email': email, 'permission': permission, 'url': url, 'content': content})
+            'request': request_or_jwt, 'email': email, 'permission': permission, 'url': url, 'content': content})
 
     return False
 
 
-def has_a_permission(request, email, item, permissions, check_parents=False):
+def has_a_permission(request_or_jwt, email, item, permissions, check_parents=False):
     """
     Consults the DBMIAuthz server for authorization checks. Uses the JWT to
     authenticate the call and checks the returned permissions for the one
     specified.
-    :param request: The current request containing the JWT to be checked
+    :param request_or_jwt: The current request containing the JWT to be checked or the JWT itself
     :param email: The email in the JWT
     :param item: The item string to check for the permission
     :param permissions: A list of permissions
@@ -171,7 +176,12 @@ def has_a_permission(request, email, item, permissions, check_parents=False):
             url.query.params.add('item', item)
 
         # Get the JWT token depending on request type
-        token = authn.get_jwt(request)
+        if type(request_or_jwt) is str:
+            token = request_or_jwt
+        else:
+            token = authn.get_jwt(request_or_jwt)
+
+        # Ensure we've got a token
         if not token:
             return False
 
@@ -210,7 +220,7 @@ def has_a_permission(request, email, item, permissions, check_parents=False):
 
     except (requests.HTTPError, TypeError, KeyError):
         logger.error('SciAuthZ permission lookup failed', exc_info=True, extra={
-            'request': request, 'email': email, 'permissions': permissions, 'url': url, 'content': content})
+            'request': request_or_jwt, 'email': email, 'permissions': permissions, 'url': url, 'content': content})
 
     return False
 
@@ -236,6 +246,59 @@ def is_admin(request, email):
         return True
 
     return False
+
+
+def get_permissions(request_or_jwt, email, item=None):
+    """
+    Consults the DBMIAuthz server for authorization checks. Uses the JWT to
+    authenticate the call and checks the returned permissions for the one
+    specified.
+    :param request_or_jwt: The current request or JWT to authenticate the call
+    :param email: The email in the JWT
+    :param item: The item string to check for the permission
+    :return: bool
+    """
+    url = None
+    content = None
+    try:
+        # Build the request
+        url = furl(dbmi_settings.AUTHZ_URL)
+        url.path.segments.append('user_permission')
+        url.path.segments.append('')
+        url.query.params.add('email', email)
+        url.query.params.add('client', dbmi_settings.CLIENT)
+
+        # Check for specific item
+        if item:
+            url.query.params.add('item', item)
+
+        # Get the JWT token depending on request type
+        if type(request_or_jwt) is str:
+            token = request_or_jwt
+        else:
+            token = authn.get_jwt(request_or_jwt)
+
+        # Ensure we've got a token
+        if not token:
+            return False
+
+        # Build headers for the SciAuthZ call
+        headers = {'Authorization': '{}{}'.format(dbmi_settings.JWT_HTTP_PREFIX, token),
+                   'Content-Type': 'application/json'}
+
+        # Run it
+        response = requests.get(url.url, headers=headers)
+        content = response.content
+        response.raise_for_status()
+
+        return response.json().get('results', [])
+
+    except (requests.HTTPError, TypeError, KeyError):
+        logger.error('SciAuthZ permission lookup failed', exc_info=True, extra={
+            'email': email, 'url': url, 'content': content, 'item': item})
+
+    return []
+
 
 ###################################################################
 #
