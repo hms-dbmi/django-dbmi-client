@@ -641,6 +641,25 @@ class DBMIAuthenticationBackend(object):
         # Should be implemented by subclass depending on data source for user
         raise SystemError('This method should not be called')
 
+    def has_perm(self, user, perm, obj):
+        """
+        Returns whether the given user has the permission or not
+        """
+        logger.info(f'has_perm: {user} - {perm} - {obj}')
+
+        # Return permission
+        return authz.has_permission(request=user.jwt, email=user.email, item=obj, permission=perm, check_parents=True)
+
+    def has_module_perms(self, user, app_label):
+        """
+        Returns whether the given user has permissions on the module or not
+        """
+        logger.info(f'has_module_perms: {user} - {app_label}')
+
+        # Return permission
+        permissions = authz.get_permissions(request=user.jwt, email=user.email, item=app_label)
+        return permissions and len(permissions)
+
     def _get_user_object(self, request):
         """
         Accepts details from the JWT user and returns an object representing
@@ -997,11 +1016,13 @@ class DBMIJWTUser(AnonymousUser):
     is_active = True
     is_staff = False
     is_superuser = False
+    jwt = None
 
     def __init__(self, request):
 
         # Get the payload
         payload = get_jwt_payload(request, verify=False)
+        self.jwt = get_jwt(request)
 
         # Set properties
         self.username = payload.get('sub')
@@ -1050,7 +1071,8 @@ class DBMIJWTUser(AnonymousUser):
         return permissions
 
     def get_all_permissions(self, obj=None):
-        return _user_get_all_permissions(self, obj)
+        # Get permissions from AuthZ
+        return authz.get_permissions(self.jwt, self.email, obj)
 
     def has_perm(self, perm, obj=None):
         """
@@ -1086,27 +1108,18 @@ class DBMIJWTUser(AnonymousUser):
         return _user_has_module_perms(self, app_label)
 
 
-# A few helper functions for common logic between User and AnonymousUser.
-def _user_get_all_permissions(user, obj):
-    permissions = set()
-
-    # TODO: Query DBMI AuthZ and return all permission items 'item.permission'
-
-    return permissions
-
-
 def _user_has_perm(user, perm, obj):
     """
     A backend can raise `PermissionDenied` to short-circuit permission checking.
     """
-    # Get all perms and compare
-    try:
-        for permission in _user_get_all_permissions(user, obj):
-            if permission == '{}.{}'.format(obj, perm):
+    for backend in django_auth.get_backends():
+        if not hasattr(backend, 'has_perm'):
+            continue
+        try:
+            if backend.has_perm(user, perm, obj):
                 return True
-    except PermissionDenied:
-        return False
-
+        except PermissionDenied:
+            return False
     return False
 
 
@@ -1114,14 +1127,14 @@ def _user_has_module_perms(user, app_label):
     """
     A backend can raise `PermissionDenied` to short-circuit permission checking.
     """
-    # Get all perms and compare
-    try:
-        for perm in _user_get_all_permissions(user, app_label):
-            if '{}.{}'.format(app_label, perm) == perm:
+    for backend in django_auth.get_backends():
+        if not hasattr(backend, 'has_module_perms'):
+            continue
+        try:
+            if backend.has_module_perms(user, app_label):
                 return True
-    except PermissionDenied:
-        return False
-
+        except PermissionDenied:
+            return False
     return False
 
 ###################################################################
