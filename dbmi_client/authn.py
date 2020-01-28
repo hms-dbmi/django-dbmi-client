@@ -648,14 +648,17 @@ class DBMIAuthenticationBackend(object):
         logger.info(f'has_perm: {user} - {perm} - {obj}')
 
         # Return permission
-        return authz.has_permission(user.jwt, user.email, obj, perm, check_parents=True)
+        return authz.has_permission(request=user.jwt, email=user.email, item=obj, permission=perm, check_parents=True)
 
-    # def has_module_perms(self, user, app_label):
-    #     """
-    #     Returns whether the given user has permissions on the module or not
-    #     """
-    #     logger.info(f'has_module_perms: {user} - {app_label}')
-        # TODO: We should implement these but we need to sort out how the call to AuthZ gets its JWT
+    def has_module_perms(self, user, app_label):
+        """
+        Returns whether the given user has permissions on the module or not
+        """
+        logger.info(f'has_module_perms: {user} - {app_label}')
+
+        # Return permission
+        permissions = authz.get_permissions(request=user.jwt, email=user.email, item=app_label)
+        return permissions and len(permissions)
 
     def _get_user_object(self, request):
         """

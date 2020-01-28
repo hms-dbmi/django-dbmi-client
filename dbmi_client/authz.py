@@ -73,12 +73,12 @@ def auth_has_authz(auth, auth_type, item):
     return None
 
 
-def has_permission(request_or_jwt, email, item, permission, check_parents=False):
+def has_permission(request, email, item, permission, check_parents=False):
     """
     Consults the DBMIAuthz server for authorization checks. Uses the JWT to
     authenticate the call and checks the returned permissions for the one
     specified.
-    :param request_or_jwt: The current request containing the JWT to be checked or the JWT itself
+    :param request: The current request containing the JWT to be checked or the JWT itself
     :param email: The email in the JWT
     :param item: The item string to check for the permission
     :param permission: The permission to be checked for in permissions returned from DBMIAuthz
@@ -100,10 +100,10 @@ def has_permission(request_or_jwt, email, item, permission, check_parents=False)
             url.query.params.add('item', item)
 
         # Get the JWT token depending on request type
-        if type(request_or_jwt) is str:
-            token = request_or_jwt
+        if type(request) is str:
+            token = request
         else:
-            token = authn.get_jwt(request_or_jwt)
+            token = authn.get_jwt(request)
 
         # Ensure we've got a token
         if not token:
@@ -144,17 +144,17 @@ def has_permission(request_or_jwt, email, item, permission, check_parents=False)
 
     except (requests.HTTPError, TypeError, KeyError):
         logger.error('SciAuthZ permission lookup failed', exc_info=True, extra={
-            'request': request_or_jwt, 'email': email, 'permission': permission, 'url': url, 'content': content})
+            'request': request, 'email': email, 'permission': permission, 'url': url, 'content': content})
 
     return False
 
 
-def has_a_permission(request_or_jwt, email, item, permissions, check_parents=False):
+def has_a_permission(request, email, item, permissions, check_parents=False):
     """
     Consults the DBMIAuthz server for authorization checks. Uses the JWT to
     authenticate the call and checks the returned permissions for the one
     specified.
-    :param request_or_jwt: The current request containing the JWT to be checked or the JWT itself
+    :param request: The current request containing the JWT to be checked or the JWT itself
     :param email: The email in the JWT
     :param item: The item string to check for the permission
     :param permissions: A list of permissions
@@ -176,10 +176,10 @@ def has_a_permission(request_or_jwt, email, item, permissions, check_parents=Fal
             url.query.params.add('item', item)
 
         # Get the JWT token depending on request type
-        if type(request_or_jwt) is str:
-            token = request_or_jwt
+        if type(request) is str:
+            token = request
         else:
-            token = authn.get_jwt(request_or_jwt)
+            token = authn.get_jwt(request)
 
         # Ensure we've got a token
         if not token:
@@ -220,7 +220,7 @@ def has_a_permission(request_or_jwt, email, item, permissions, check_parents=Fal
 
     except (requests.HTTPError, TypeError, KeyError):
         logger.error('SciAuthZ permission lookup failed', exc_info=True, extra={
-            'request': request_or_jwt, 'email': email, 'permissions': permissions, 'url': url, 'content': content})
+            'request': request, 'email': email, 'permissions': permissions, 'url': url, 'content': content})
 
     return False
 
@@ -248,12 +248,12 @@ def is_admin(request, email):
     return False
 
 
-def get_permissions(request_or_jwt, email, item=None):
+def get_permissions(request, email, item=None):
     """
     Consults the DBMIAuthz server for authorization checks. Uses the JWT to
     authenticate the call and checks the returned permissions for the one
     specified.
-    :param request_or_jwt: The current request or JWT to authenticate the call
+    :param request: The current request or JWT to authenticate the call
     :param email: The email in the JWT
     :param item: The item string to check for the permission
     :return: bool
@@ -273,10 +273,10 @@ def get_permissions(request_or_jwt, email, item=None):
             url.query.params.add('item', item)
 
         # Get the JWT token depending on request type
-        if type(request_or_jwt) is str:
-            token = request_or_jwt
+        if type(request) is str:
+            token = request
         else:
-            token = authn.get_jwt(request_or_jwt)
+            token = authn.get_jwt(request)
 
         # Ensure we've got a token
         if not token:
