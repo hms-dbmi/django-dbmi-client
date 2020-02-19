@@ -302,7 +302,7 @@ def validate_request(request):
             return validate_rs256_jwt(jwt_string)
 
         else:
-            logger.error(f'Unsupported JWT algorithm: {algorithm}')
+            logger.warning(f'Unsupported JWT algorithm: {algorithm}')
             return None
 
     except Exception as e:
@@ -501,7 +501,7 @@ def validate_rs256_jwt(jwt_string):
             jwk_pub_key = retrieve_public_key(dbmi_settings.AUTH0_TENANT, jwt_string)
 
         if not jwk_pub_key:
-            logger.error(f'JWT Client ID could not be matched: {jwt_client_id}')
+            logger.warning(f'JWT Client ID could not be matched: {jwt_client_id}')
             return None
 
     except Exception as e:
