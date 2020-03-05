@@ -596,6 +596,8 @@ def validate_hs256_jwt(jwt_string):
 
 class DBMIAuthenticationBackend(object):
 
+    request = None
+
     def authenticate(self, request, token=None):
         """
         All versions of this backend follow the same flow:
@@ -635,6 +637,9 @@ class DBMIAuthenticationBackend(object):
             # Sync the user to ensure we've got updated properties
             self._sync_user(request, user)
 
+        # Retain request for permissions checks
+        self.request = request
+
         return user
 
     def get_user(self, user_id):
@@ -645,19 +650,19 @@ class DBMIAuthenticationBackend(object):
         """
         Returns whether the given user has the permission or not
         """
-        logger.info(f'has_perm: {user} - {perm} - {obj}')
+        logger.debug(f'has_perm: {user} - {perm} - {obj}')
 
         # Return permission
-        return authz.has_permission(request=user.jwt, email=user.email, item=obj, permission=perm, check_parents=True)
+        return authz.has_permission(request=self.request, email=user.email, item=obj, permission=perm, check_parents=True)
 
     def has_module_perms(self, user, app_label):
         """
         Returns whether the given user has permissions on the module or not
         """
-        logger.info(f'has_module_perms: {user} - {app_label}')
+        logger.debug(f'has_module_perms: {user} - {app_label}')
 
         # Return permission
-        permissions = authz.get_permissions(request=user.jwt, email=user.email, item=app_label)
+        permissions = authz.get_permissions(request=self.request, email=user.email, item=app_label)
         return permissions and len(permissions)
 
     def _get_user_object(self, request):
