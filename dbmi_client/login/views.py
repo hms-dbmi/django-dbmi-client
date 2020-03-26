@@ -68,9 +68,15 @@ def login(request):
         'callback_url': callback_url.url,
         'auth0_client_id': dbmi_settings.AUTH0_CLIENT_ID,
         'auth0_domain': '{}.auth0.com'.format(dbmi_settings.AUTH0_TENANT),
+        'scope': dbmi_settings.AUTH0_SCOPE,
         'title': dbmi_settings.AUTHN_TITLE,
         'icon_url': dbmi_settings.AUTHN_ICON_URL
     }
+
+    # Check for messages to display on lock widget
+    if request.GET.get('lock_message'):
+        context['lock_message'] = request.GET.get('lock_message')
+        context['lock_message_type'] = request.GET.get('lock_message_type', 'error')
 
     return render(request, template_name='dbmi_client/login/login.html', context=context)
 
@@ -85,25 +91,47 @@ def callback(request):
     logger.debug("Call returned from Auth0.")
 
     # Fetch some of the request parameters
-    query = None
-    login_url = furl.furl(request.build_absolute_uri(reverse('dbmi_login:login')))
+    auth_url = None
     try:
-        # Get the original query sent to dbmiauth
+        # Get the original query sent to dbmi-auth
         query = QueryDict(base64.urlsafe_b64decode(request.GET.get('query').encode('utf-8')).decode('utf-8'))
 
         # Get the return URL
-        login_url = login_url.url + '?{}'.format(query.urlencode('/'))
+        auth_url = furl.furl(reverse('dbmi_login:login') + '?{}'.format(query.urlencode('/')))
 
     except Exception as e:
         logger.error('Failed to parse query parameters: {}'.format(e), exc_info=True, extra={'request': request})
 
+        # Set an empty dict
+        query = {}
+
     # This is a code passed back from Auth0 that is used to retrieve a token (Which is used to retrieve user info).
     code = request.GET.get('code')
     if not code:
-        logger.error('No code from Auth0', exc_info=True, extra={'request': request})
+        logger.error('Auth0 code error: {} - {}'.format(request.GET.get('error'), request.GET.get('error_description')),
+                     extra={'request': request, 'query': query, 'next_url': query.get('next'),
+                            'auth0_error': request.GET.get('error'),
+                            'auth0_error_description': request.GET.get('error_description')})
+
+        # Check for disabled third-party cookies
+        if 'unable to configure verification' in request.GET.get('error_description', '').lower():
+            logger.debug(f'Auth0 returned an error: {request.GET.get("error")} - {request.GET.get("error_message")}')
+
+            # Add to query for displaying on lock widget
+            auth_url.query.params.add('lock_message_type', 'error')
+            auth_url.query.params.add('lock_message', 'Cookies must be enabled to authenticate')
+
+        else:
+            logger.debug(f'Auth0 returned an error: {request.GET.get("error")} - {request.GET.get("error_message")}')
+
+            # Add to query for displaying on lock widget
+            auth_url.query.params.add('lock_message_type', 'error')
+            auth_url.query.params.add('lock_message',
+                                      request.GET.get('error_description',
+                                                      'The service has encountered an unexpected error'))
 
         # Redirect back to the auth screen and attach the original query
-        return redirect(login_url)
+        return redirect(auth_url.url)
 
     json_header = {'content-type': 'application/json'}
 
@@ -131,7 +159,7 @@ def callback(request):
         })
 
         # Redirect back to the auth screen and attach the original query
-        return redirect(login_url)
+        return redirect(auth_url.url)
 
     # Get tokens
     token_info = token_response.json()
@@ -149,7 +177,7 @@ def callback(request):
         })
 
         # Redirect back to the auth screen and attach the original query
-        return redirect(login_url)
+        return redirect(auth_url.url)
 
     # Get user info
     user_info = user_response.json()

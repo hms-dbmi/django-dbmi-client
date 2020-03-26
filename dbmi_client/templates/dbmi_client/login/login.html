@@ -30,6 +30,16 @@
                 title: title
             }
         });
+        {# Check for message to show #}
+        {% if lock_message %}
+        lock.show({
+            flashMessage:{
+                type: "{{ lock_message_type|default_if_none:'success' }}",
+                text: "{{ lock_message }}"
+            }
+        });
+        {% else %}
         lock.show();
+        {% endif %}
     </script>
 {% endblock %}
