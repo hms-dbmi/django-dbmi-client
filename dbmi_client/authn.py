@@ -677,6 +677,8 @@ class DBMIAuthenticationBackend(object):
         Called after a user is fetched/created and syncs any additional properties
         from the JWT's payload to the user object.
         """
+        username = None
+        email = None
         try:
             # Get the unverified payload
             payload = get_jwt_payload(request, verify=False)
@@ -699,7 +701,7 @@ class DBMIAuthenticationBackend(object):
 
         except Exception as e:
             logger.exception('User syncing error: {}'.format(e), exc_info=True,
-                             extra={'user': user.id, 'request': request})
+                             extra={'request': request, 'user': user, 'username': username, 'email': email})
 
 
 class DBMIJWTAuthenticationBackend(DBMIAuthenticationBackend):
@@ -770,9 +772,9 @@ class DBMIJWTAdminAuthenticationBackend(DBMIAuthenticationBackend):
                 user.is_staff = False
                 user.is_superuser = False
 
-        except (KeyError, IndexError, TypeError) as e:
+        except Exception as e:
             logger.exception('User syncing error: {}'.format(e), exc_info=True,
-                             extra={'user': user.id, 'request': request})
+                             extra={'user': user, 'request': request})
 
 
 class DBMIModelAuthenticationBackend(DBMIAuthenticationBackend):
@@ -865,6 +867,8 @@ class DBMIModelAuthenticationBackend(DBMIAuthenticationBackend):
         Called after a user is fetched/created and syncs any additional properties
         from the JWT's payload to the user object.
         """
+        username = None
+        email = None
         try:
             # Get the unverified payload
             payload = get_jwt_payload(request, verify=False)
@@ -890,7 +894,7 @@ class DBMIModelAuthenticationBackend(DBMIAuthenticationBackend):
 
         except Exception as e:
             logger.exception('User syncing error: {}'.format(e), exc_info=True,
-                             extra={'user': user.id, 'request': request})
+                             extra={'request': request, 'user': user, 'username': username, 'email': email})
 
 
 class DBMIUsersModelAuthenticationBackend(DBMIModelAuthenticationBackend):
@@ -912,15 +916,22 @@ class DBMIUsersModelAuthenticationBackend(DBMIModelAuthenticationBackend):
         # Do normal sync first
         super(DBMIModelAuthenticationBackend, self)._sync_user(request, user)
 
-        # Check if admin
-        is_admin = authz.is_admin(request, user.email)
-        if is_admin:
-            logger.debug(f'User: {user.email} has been granted admin/superuser privileges')
+        is_admin = False
+        try:
+            # Check if admin
+            is_admin = authz.is_admin(request, user.email)
+            if is_admin:
+                logger.debug(f'User: {user.email} has been granted admin/superuser privileges')
 
-        # Ensure the model is updated
-        user.is_staff = is_admin
-        user.is_superuser = is_admin
-        user.save()
+            # Ensure the model is updated
+            user.is_staff = is_admin
+            user.is_superuser = is_admin
+            user.save()
+
+        except Exception as e:
+            logger.exception('Superuser syncing error: {}'.format(e), exc_info=True,
+                             extra={'request': request, 'user': user, 'username': user.username, 'email': user.email,
+                                    'is_admin': is_admin})
 
 
 class DBMIAdminModelAuthenticationBackend(DBMIModelAuthenticationBackend):
@@ -989,18 +1000,27 @@ class DBMISuperuserModelAuthenticationBackend(DBMIAdminModelAuthenticationBacken
         # Do normal sync first
         super(DBMISuperuserModelAuthenticationBackend, self)._sync_user(request, user)
 
-        # Check if admin
-        if is_admin is None:
-            is_admin = authz.is_admin(request, user.email)
+        try:
+            # Check if admin
+            if is_admin is None:
+                is_admin = authz.is_admin(request, user.email)
 
-        # Ensure the model is updated
-        user.is_staff = is_admin
-        user.is_superuser = is_admin
-        user.save()
+            # Ensure the model is updated
+            user.is_staff = is_admin
+            user.is_superuser = is_admin
+            user.save()
 
-        # If not admin (indicates they used to be), save and raise exception
-        if not is_admin:
-            logger.debug('User was superuser, but is now missing authz, booting them: {}'.format(user.username))
+            # If not admin (indicates they used to be), save and raise exception
+            if not is_admin:
+                logger.debug('User was superuser, but is now missing authz, booting them: {}'.format(user.username))
+                raise PermissionDenied
+
+        except Exception as e:
+            logger.exception('Superuser syncing error: {}'.format(e), exc_info=True,
+                             extra={'request': request, 'user': user, 'username': user.username, 'email': user.email,
+                                    'is_admin': is_admin})
+
+            logger.debug('Encountered an issue and could not check admin/superuser status: defaulting to access denied')
             raise PermissionDenied
 
 ###################################################################
