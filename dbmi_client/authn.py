@@ -10,7 +10,6 @@ from django.contrib import auth as django_auth
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import PermissionDenied
 from django.db.models import Q
-from django.core.exceptions import MultipleObjectsReturned
 from django.shortcuts import redirect
 from django.urls import reverse
 from rest_framework.authentication import BaseAuthentication
@@ -18,6 +17,7 @@ from rest_framework import exceptions
 
 from dbmi_client.settings import dbmi_settings
 from dbmi_client import authz
+from dbmi_client.serializers import UserSerializer
 
 # Get the app logger
 import logging
@@ -596,8 +596,6 @@ def validate_hs256_jwt(jwt_string):
 
 class DBMIAuthenticationBackend(object):
 
-    request = None
-
     def authenticate(self, request, token=None):
         """
         All versions of this backend follow the same flow:
@@ -637,9 +635,6 @@ class DBMIAuthenticationBackend(object):
             # Sync the user to ensure we've got updated properties
             self._sync_user(request, user)
 
-        # Retain request for permissions checks
-        self.request = request
-
         return user
 
     def get_user(self, user_id):
@@ -650,20 +645,15 @@ class DBMIAuthenticationBackend(object):
         """
         Returns whether the given user has the permission or not
         """
-        logger.debug(f'has_perm: {user} - {perm} - {obj}')
-
-        # Return permission
-        return authz.has_permission(request=self.request, email=user.email, item=obj, permission=perm, check_parents=True)
+        # This authentication backend does not manage Django-style permissions
+        pass
 
     def has_module_perms(self, user, app_label):
         """
         Returns whether the given user has permissions on the module or not
         """
-        logger.debug(f'has_module_perms: {user} - {app_label}')
-
-        # Return permission
-        permissions = authz.get_permissions(request=self.request, email=user.email, item=app_label)
-        return permissions and len(permissions)
+        # This authentication backend does not manage Django-style permissions
+        pass
 
     def _get_user_object(self, request):
         """
@@ -687,6 +677,8 @@ class DBMIAuthenticationBackend(object):
         Called after a user is fetched/created and syncs any additional properties
         from the JWT's payload to the user object.
         """
+        username = None
+        email = None
         try:
             # Get the unverified payload
             payload = get_jwt_payload(request, verify=False)
@@ -701,12 +693,15 @@ class DBMIAuthenticationBackend(object):
                 user.username = username
 
             if not user.email.lower() == email:
-                logger.debug('User\'s email did not match JWT: {} -> {}'.format(user.email, email))
-                user.email = email
+                logger.error('User\'s email did not match JWT: {} -> {}'.format(user.email, email), extra={
+                    'request': request, 'username': user.username, 'email': user.email, 'jwt_username': username,
+                    'jwt_email': email,
+                })
+                raise PermissionDenied
 
-        except (KeyError, IndexError, TypeError) as e:
+        except Exception as e:
             logger.exception('User syncing error: {}'.format(e), exc_info=True,
-                             extra={'user': user.id, 'request': request})
+                             extra={'request': request, 'user': user, 'username': username, 'email': email})
 
 
 class DBMIJWTAuthenticationBackend(DBMIAuthenticationBackend):
@@ -777,9 +772,9 @@ class DBMIJWTAdminAuthenticationBackend(DBMIAuthenticationBackend):
                 user.is_staff = False
                 user.is_superuser = False
 
-        except (KeyError, IndexError, TypeError) as e:
+        except Exception as e:
             logger.exception('User syncing error: {}'.format(e), exc_info=True,
-                             extra={'user': user.id, 'request': request})
+                             extra={'user': user, 'request': request})
 
 
 class DBMIModelAuthenticationBackend(DBMIAuthenticationBackend):
@@ -821,20 +816,26 @@ class DBMIModelAuthenticationBackend(DBMIAuthenticationBackend):
 
         # Fetch the current User model
         UserModel = django_auth.get_user_model()
-        try:
-            # Find the user
-            user = UserModel.objects.get(Q(username=username) | Q(email=email))
+
+        # Find the user
+        users = UserModel.objects.filter(Q(username=username) | Q(email=email)).order_by('-date_joined')
+        if not users:
+            logger.debug('User does not yet exist: {} : {}'.format(username, email))
+            return None
+
+        # Get first user
+        user = users.first()
+
+        # Check for duplicate users (on email)
+        if len(users) > 1:
+            logger.error('Found {} users for {} : {}'.format(len(users), email, ','.join([u.username for u in users])),
+                         extra={'request': request, 'users': json.dumps(UserSerializer(users, many=True).data)})
+            logger.debug('Returning oldest user: {} : {}'.format(user.username, user.email))
+
+        else:
             logger.debug('Found user: {} : {}'.format(username, email))
 
-            return user
-
-        except MultipleObjectsReturned:
-            logger.error('Duplicate users exist for {} : {}'.format(username, email))
-
-        except UserModel.DoesNotExist:
-            logger.debug('User does not yet exist: {} : {}'.format(username, email))
-
-        return None
+        return user
 
     def _create_user(self, request):
         """
@@ -866,6 +867,8 @@ class DBMIModelAuthenticationBackend(DBMIAuthenticationBackend):
         Called after a user is fetched/created and syncs any additional properties
         from the JWT's payload to the user object.
         """
+        username = None
+        email = None
         try:
             # Get the unverified payload
             payload = get_jwt_payload(request, verify=False)
@@ -880,15 +883,18 @@ class DBMIModelAuthenticationBackend(DBMIAuthenticationBackend):
                 user.username = username
 
             if not user.email.lower() == email:
-                logger.debug('User\'s email did not match JWT: {} -> {}'.format(user.email, email))
-                user.email = email
+                logger.error('User\'s email did not match JWT: {} -> {}'.format(user.email, email), extra={
+                    'request': request, 'username': user.username, 'email': user.email, 'jwt_username': username,
+                    'jwt_email': email,
+                })
+                raise PermissionDenied
 
             # Save
             user.save()
 
-        except (KeyError, IndexError, TypeError) as e:
+        except Exception as e:
             logger.exception('User syncing error: {}'.format(e), exc_info=True,
-                             extra={'user': user.id, 'request': request})
+                             extra={'request': request, 'user': user, 'username': username, 'email': email})
 
 
 class DBMIUsersModelAuthenticationBackend(DBMIModelAuthenticationBackend):
@@ -910,15 +916,22 @@ class DBMIUsersModelAuthenticationBackend(DBMIModelAuthenticationBackend):
         # Do normal sync first
         super(DBMIModelAuthenticationBackend, self)._sync_user(request, user)
 
-        # Check if admin
-        is_admin = authz.is_admin(request, user.email)
-        if is_admin:
-            logger.debug(f'User: {user.email} has been granted admin/superuser privileges')
+        is_admin = False
+        try:
+            # Check if admin
+            is_admin = authz.is_admin(request, user.email)
+            if is_admin:
+                logger.debug(f'User: {user.email} has been granted admin/superuser privileges')
 
-        # Ensure the model is updated
-        user.is_staff = is_admin
-        user.is_superuser = is_admin
-        user.save()
+            # Ensure the model is updated
+            user.is_staff = is_admin
+            user.is_superuser = is_admin
+            user.save()
+
+        except Exception as e:
+            logger.exception('Superuser syncing error: {}'.format(e), exc_info=True,
+                             extra={'request': request, 'user': user, 'username': user.username, 'email': user.email,
+                                    'is_admin': is_admin})
 
 
 class DBMIAdminModelAuthenticationBackend(DBMIModelAuthenticationBackend):
@@ -987,18 +1000,27 @@ class DBMISuperuserModelAuthenticationBackend(DBMIAdminModelAuthenticationBacken
         # Do normal sync first
         super(DBMISuperuserModelAuthenticationBackend, self)._sync_user(request, user)
 
-        # Check if admin
-        if is_admin is None:
-            is_admin = authz.is_admin(request, user.email)
+        try:
+            # Check if admin
+            if is_admin is None:
+                is_admin = authz.is_admin(request, user.email)
 
-        # Ensure the model is updated
-        user.is_staff = is_admin
-        user.is_superuser = is_admin
-        user.save()
+            # Ensure the model is updated
+            user.is_staff = is_admin
+            user.is_superuser = is_admin
+            user.save()
 
-        # If not admin (indicates they used to be), save and raise exception
-        if not is_admin:
-            logger.debug('User was superuser, but is now missing authz, booting them: {}'.format(user.username))
+            # If not admin (indicates they used to be), save and raise exception
+            if not is_admin:
+                logger.debug('User was superuser, but is now missing authz, booting them: {}'.format(user.username))
+                raise PermissionDenied
+
+        except Exception as e:
+            logger.exception('Superuser syncing error: {}'.format(e), exc_info=True,
+                             extra={'request': request, 'user': user, 'username': user.username, 'email': user.email,
+                                    'is_admin': is_admin})
+
+            logger.debug('Encountered an issue and could not check admin/superuser status: defaulting to access denied')
             raise PermissionDenied
 
 ###################################################################
