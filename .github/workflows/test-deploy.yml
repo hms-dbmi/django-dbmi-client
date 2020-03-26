@@ -39,3 +39,7 @@ jobs:
         git config --global user.name "semantic-release (via Github Actions)"
         git config --global user.email "semantic-release@github"
         semantic-release publish
+      with:
+        env:
+          PYPI_USERNAME: ${{ secrets.PYPI_USERNAME }}
+          PYPI_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
