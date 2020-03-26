@@ -1,13 +1,13 @@
 # This workflow will install Python dependencies, run tests and lint with a single version of Python
 # For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
 
-name: Python application
+name: Test
 
 on:
-  push:
-    branches: [ master ]
   pull_request:
-    branches: [ master ]
+    branches: [ 'master' ]
+  push:
+    branches: [ '!master', '*' ]
 
 jobs:
   build:
@@ -36,8 +36,3 @@ jobs:
     - name: Test
       run: |
         python setup.py test
-    - name: Deploy
-      run: |
-        git config --global user.name "semantic-release (via Github Actions)"
-        git config --global user.email "semantic-release@github"
-        semantic-release publish
