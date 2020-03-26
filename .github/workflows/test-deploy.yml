@@ -35,12 +35,11 @@ jobs:
       run: |
         python setup.py test
     - name: Deploy
+      env:
+        PYPI_USERNAME: ${{ secrets.PYPI_USERNAME }}
+        PYPI_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
       run: |
         git config --global user.name "semantic-release (via Github Actions)"
         git config --global user.email "semantic-release@github"
         # TODO: Enable this when ready: semantic-release publish
         semantic-release version --noop
-      with:
-        env:
-          PYPI_USERNAME: ${{ secrets.PYPI_USERNAME }}
-          PYPI_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
