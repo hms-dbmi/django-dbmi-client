@@ -18,9 +18,9 @@ from dbmi_client import environment as env
 # Set service URLs based on environment
 DBMI_ENVIRONMENTS = {
     'prod': {
-        'AUTHN_URL': 'https://authentication.dbmi.hms.harvard.edu:8001',
-        'AUTHZ_URL': 'https://authorization.dbmi.hms.harvard.edu:8003',
-        'REG_URL': 'https://registration.dbmi.hms.harvard.edu:8005',
+        'AUTHN_URL': 'https://authentication.dbmi.hms.harvard.edu',
+        'AUTHZ_URL': 'https://authorization.dbmi.hms.harvard.edu',
+        'REG_URL': 'https://registration.dbmi.hms.harvard.edu',
         'FILESERVICE_URL': 'https://files.dbmi.hms.harvard.edu',
         'JWT_AUTHZ_NAMESPACE': 'https://authorization.dbmi.hms.harvard.edu',
     },
