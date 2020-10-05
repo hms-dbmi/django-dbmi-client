@@ -5,7 +5,7 @@ name: Test
 
 on:
   push:
-    branches-ignore: [ master ]
+    branches-ignore: [ master, development, beta, alpha ]
 
 jobs:
   build:
@@ -23,7 +23,6 @@ jobs:
         python -m pip install --upgrade pip
         python setup.py -q install
         pip install -r requirements-test.txt
-        pip install python-semantic-release
     - name: Lint
       run: |
         pip install flake8

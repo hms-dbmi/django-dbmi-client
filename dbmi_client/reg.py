@@ -52,7 +52,8 @@ def get_dbmi_user(request, email=None):
         logger.error('Get user response: {}'.format(response.content))
 
     # Return the profile
-    return response['results'][0] if len(response['results']) else None
+    profiles = response.json()['results']
+    return next(iter(profiles), None)
 
 
 def update_dbmi_user(request, **profile):

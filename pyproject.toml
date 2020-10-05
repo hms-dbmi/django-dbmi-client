@@ -1,0 +1,42 @@
+[build-system]
+requires = [ "setuptools >= 35.0.2", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.black]
+line-length = 120
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''
+
+[tool.tox]
+legacy_tox_ini = '''
+[tox]
+envlist = py{36,37,38}-django{111,22,30}
+install_command = pip install {opts} "{packages}"
+
+[testenv]
+basepython =
+    py36: python3.6
+    py37: python3.7
+    py38: python3.8
+
+commands =
+	nosetests {posargs}
+
+deps =
+    -rrequirements-test.txt
+    django111: Django>=1.11,<1.12
+    django22: Django>=2.2,<2.3
+    django30: Django>=3.0,<4.0
+'''

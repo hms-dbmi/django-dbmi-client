@@ -1,4 +1,3 @@
-
 # Created by https://www.gitignore.io/api/osx,linux,django,python,windows,pycharm+all,visualstudiocode
 
 ### Django ###
@@ -183,6 +182,7 @@ coverage.xml
 *.cover
 .hypothesis/
 .pytest_cache/
+cover
 
 # Translations
 *.mo
