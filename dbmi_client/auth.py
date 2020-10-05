@@ -1,5 +1,4 @@
 from django.core.exceptions import PermissionDenied
-from django.contrib import auth as django_auth
 
 from dbmi_client.settings import dbmi_settings
 from dbmi_client import authn
@@ -7,17 +6,19 @@ from dbmi_client import authz
 
 # Get the app logger
 import logging
+
 logger = logging.getLogger(dbmi_settings.LOGGER_NAME)
 
 
 def dbmi_user(view):
-    '''
+    """
     Decorator to only check if the current user's JWT is valid
     :param function:
     :type function:
     :return:
     :rtype:
-    '''
+    """
+
     def wrap(request, *args, **kwargs):
 
         # Check for current user
@@ -31,13 +32,14 @@ def dbmi_user(view):
 
 
 def dbmi_admin(view):
-    '''
+    """
     Decorator to check for valid JWT and admin permissions
     :param function:
     :type function:
     :return:
     :rtype:
-    '''
+    """
+
     def wrap(request, *args, **kwargs):
 
         # Check for current user
@@ -60,9 +62,9 @@ def dbmi_admin(view):
 
         # Possibly store these elsewhere for records
         # TODO: Figure out a better way to flag failed access attempts
-        logger.warning('{} Failed {} permission on {}'.format(email,
-                                                              dbmi_settings.AUTHZ_ADMIN_PERMISSION,
-                                                              dbmi_settings.CLIENT))
+        logger.warning(
+            "{} Failed {} permission on {}".format(email, dbmi_settings.AUTHZ_ADMIN_PERMISSION, dbmi_settings.CLIENT)
+        )
 
         raise PermissionDenied
 
@@ -70,16 +72,15 @@ def dbmi_admin(view):
 
 
 def dbmi_group(group):
-    '''
+    """
     Decorator that accepts a group and checks the request user to see if they
     belong to said group.
     :param group: The group
     :type group: str
     :return: function
-    '''
+    """
 
     def real_decorator(view):
-
         def wrap(request, *args, **kwargs):
 
             # Check for current user
@@ -95,7 +96,7 @@ def dbmi_group(group):
 
             # Possibly store these elsewhere for records
             # TODO: Figure out a better way to flag failed access attempts
-            logger.warning('{} Failed {} group on {}'.format(payload.get('email'), group, dbmi_settings.CLIENT))
+            logger.warning("{} Failed {} group on {}".format(payload.get("email"), group, dbmi_settings.CLIENT))
 
             # Forbid if nothing else
             raise PermissionDenied
@@ -108,16 +109,15 @@ def dbmi_group(group):
 
 
 def dbmi_role(role):
-    '''
+    """
     Decorator that accepts an item string that is used to retrieve
     roles from JWT AuthZ claims.
     :param role: The role
     :type role: str
     :return: function
-    '''
+    """
 
     def real_decorator(view):
-
         def wrap(request, *args, **kwargs):
 
             # Check for current user
@@ -133,7 +133,7 @@ def dbmi_role(role):
 
             # Possibly store these elsewhere for records
             # TODO: Figure out a better way to flag failed access attempts
-            logger.warning('{} Failed {} group on {}'.format(payload.get('email'), role, dbmi_settings.CLIENT))
+            logger.warning("{} Failed {} group on {}".format(payload.get("email"), role, dbmi_settings.CLIENT))
 
             # Forbid if nothing else
             raise PermissionDenied
@@ -146,16 +146,15 @@ def dbmi_role(role):
 
 
 def dbmi_app_permission(permission):
-    '''
+    """
     Decorator that accepts an item string that is used to retrieve
     permissions from SciAuthZ.
     :param permission: The permission
     :type permission: str
     :return: function
-    '''
+    """
 
     def real_decorator(view):
-
         def wrap(request, *args, **kwargs):
 
             # Check for current user
@@ -178,7 +177,7 @@ def dbmi_app_permission(permission):
 
             # Possibly store these elsewhere for records
             # TODO: Figure out a better way to flag failed access attempts
-            logger.warning('{} Failed {} permission on {}'.format(email, permission, dbmi_settings.CLIENT))
+            logger.warning("{} Failed {} permission on {}".format(email, permission, dbmi_settings.CLIENT))
 
             # Forbid if nothing else
             raise PermissionDenied
@@ -191,7 +190,7 @@ def dbmi_app_permission(permission):
 
 
 def dbmi_item_permission(item, permission):
-    '''
+    """
     Decorator that accepts an item string that is checked for the passed permission. Item is an arbitrary
     string the application uses internally for specific or object-level permissions.
     :param item: The item
@@ -199,10 +198,9 @@ def dbmi_item_permission(item, permission):
     :param permission: The permission
     :type permission: str
     :return: function
-    '''
+    """
 
     def real_decorator(view):
-
         def wrap(request, *args, **kwargs):
 
             # Check for current user
@@ -218,7 +216,7 @@ def dbmi_item_permission(item, permission):
 
             # Possibly store these elsewhere for records
             # TODO: Figure out a better way to flag failed access attempts
-            logger.warning('{} Failed {} permission on {}'.format(email, permission, dbmi_settings.CLIENT))
+            logger.warning("{} Failed {} permission on {}".format(email, permission, dbmi_settings.CLIENT))
 
             # Forbid if nothing else
             raise PermissionDenied

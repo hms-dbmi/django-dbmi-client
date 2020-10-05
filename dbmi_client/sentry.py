@@ -17,9 +17,9 @@ class DBMISentryClient(DjangoClient):
 
         # Get info from token header
         return {
-            'ip_address': get_client_ip(request.META),
-            'username': get_jwt_username(request, verify=False),
-            'email': get_jwt_email(request, verify=False),
-            'client': get_jwt_value(request, 'aud', verify=False),
-            'tenant': get_jwt_value(request, 'iss', verify=False),
+            "ip_address": get_client_ip(request.META),
+            "username": get_jwt_username(request, verify=False),
+            "email": get_jwt_email(request, verify=False),
+            "client": get_jwt_value(request, "aud", verify=False),
+            "tenant": get_jwt_value(request, "iss", verify=False),
         }

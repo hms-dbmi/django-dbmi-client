@@ -21,10 +21,11 @@ from dbmi_client.serializers import UserSerializer
 
 # Get the app logger
 import logging
+
 logger = logging.getLogger(dbmi_settings.LOGGER_NAME)
 
 # Set a key to cache JWKs under in the DBMI.AUTH0 settings
-CACHED_JWKS_KEY = '__DBMI_CLIENT_CACHED_JWKS__'
+CACHED_JWKS_KEY = "__DBMI_CLIENT_CACHED_JWKS__"
 
 
 def login(request):
@@ -72,16 +73,16 @@ def login_redirect_url(request, next_url=None):
     :return: Response
     """
     # Check for local login enabled
-    if apps.is_installed('dbmi_client.login'):
+    if apps.is_installed("dbmi_client.login"):
 
         # Use local login URL
-        login_url = furl(request.build_absolute_uri(reverse('dbmi_login:login')))
+        login_url = furl(request.build_absolute_uri(reverse("dbmi_login:login")))
 
     else:
 
         # Build the URL using DBMI-AuthN
         login_url = furl(dbmi_settings.AUTHN_URL)
-        login_url.path.segments.extend(['login', 'auth'])
+        login_url.path.segments.extend(["login", "auth"])
 
     # If no next URL, determine where to dump them after logout
     if not next_url:
@@ -92,12 +93,12 @@ def login_redirect_url(request, next_url=None):
             next_url = request.build_absolute_uri()
 
     # Add next url
-    logger.debug('Login next URL: {}'.format(next_url))
+    logger.debug("Login next URL: {}".format(next_url))
     login_url.query.params.add(dbmi_settings.LOGIN_REDIRECT_KEY, next_url)
 
     # Add the default client ID, if specified
-    if hasattr(dbmi_settings, 'AUTH0_CLIENT_ID') and getattr(dbmi_settings, 'AUTH0_CLIENT_ID'):
-        login_url.query.params.add('client_id', dbmi_settings.AUTH0_CLIENT_ID)
+    if hasattr(dbmi_settings, "AUTH0_CLIENT_ID") and getattr(dbmi_settings, "AUTH0_CLIENT_ID"):
+        login_url.query.params.add("client_id", dbmi_settings.AUTH0_CLIENT_ID)
 
     # Check for branding
     if dbmi_settings.AUTHN_TITLE or dbmi_settings.AUTHN_ICON_URL:
@@ -105,16 +106,16 @@ def login_redirect_url(request, next_url=None):
         # Add the included parameters
         branding = {}
         if dbmi_settings.AUTHN_TITLE:
-            branding['title'] = dbmi_settings.AUTHN_TITLE
+            branding["title"] = dbmi_settings.AUTHN_TITLE
 
         if dbmi_settings.AUTHN_TITLE:
-            branding['icon_url'] = dbmi_settings.AUTHN_ICON_URL
+            branding["icon_url"] = dbmi_settings.AUTHN_ICON_URL
 
         # Encode it and pass it along
-        branding_param = base64.urlsafe_b64encode(json.dumps(branding).encode('utf-8')).decode('utf-8')
-        login_url.query.params.add('branding', branding_param)
+        branding_param = base64.urlsafe_b64encode(json.dumps(branding).encode("utf-8")).decode("utf-8")
+        login_url.query.params.add("branding", branding_param)
 
-    logger.debug('Login URL: {}'.format(login_url.url))
+    logger.debug("Login URL: {}".format(login_url.url))
     return login_url.url
 
 
@@ -153,16 +154,16 @@ def logout_redirect_url(request, next_url=None):
     :return: The response object that takes the user to the logout endpoint
     """
     # Check for local login enabled
-    if apps.is_installed('dbmi_client.login'):
+    if apps.is_installed("dbmi_client.login"):
 
         # Build the URL to DBMI-Client's logout page
-        logout_url = furl(request.build_absolute_uri(reverse('dbmi_login:logout')))
+        logout_url = furl(request.build_absolute_uri(reverse("dbmi_login:logout")))
 
     else:
 
         # Build the URL to DBMI-AuthN's logout endpoint
         logout_url = furl(dbmi_settings.AUTHN_URL)
-        logout_url.path.segments.extend(['login', 'logout'])
+        logout_url.path.segments.extend(["login", "logout"])
 
     # If no next URL, determine where to dump them after logout
     if not next_url:
@@ -172,14 +173,14 @@ def logout_redirect_url(request, next_url=None):
         else:
             next_url = request.build_absolute_uri()
 
-    logger.debug('Logout next URL: {}'.format(next_url))
+    logger.debug("Logout next URL: {}".format(next_url))
 
     # Add next url
     logout_url.query.params.add(dbmi_settings.LOGOUT_REDIRECT_KEY, next_url)
 
     # Add the default client ID, if specified
-    if hasattr(dbmi_settings, 'AUTH0_CLIENT_ID') and getattr(dbmi_settings, 'AUTH0_CLIENT_ID'):
-        logout_url.query.params.add('client_id', dbmi_settings.AUTH0_CLIENT_ID)
+    if hasattr(dbmi_settings, "AUTH0_CLIENT_ID") and getattr(dbmi_settings, "AUTH0_CLIENT_ID"):
+        logout_url.query.params.add("client_id", dbmi_settings.AUTH0_CLIENT_ID)
 
     # Check for branding
     if dbmi_settings.AUTHN_TITLE or dbmi_settings.AUTHN_ICON_URL:
@@ -187,20 +188,20 @@ def logout_redirect_url(request, next_url=None):
         # Add the included parameters
         branding = {}
         if dbmi_settings.AUTHN_TITLE:
-            branding['title'] = dbmi_settings.AUTHN_TITLE
+            branding["title"] = dbmi_settings.AUTHN_TITLE
 
         if dbmi_settings.AUTHN_TITLE:
-            branding['icon_url'] = dbmi_settings.AUTHN_ICON_URL
+            branding["icon_url"] = dbmi_settings.AUTHN_ICON_URL
 
         # Encode it and pass it along
-        branding_param = base64.urlsafe_b64encode(json.dumps(branding).encode('utf-8')).decode('utf-8')
-        logout_url.query.params.add('branding', branding_param)
+        branding_param = base64.urlsafe_b64encode(json.dumps(branding).encode("utf-8")).decode("utf-8")
+        logout_url.query.params.add("branding", branding_param)
 
-    logger.debug('Logout URL: {}'.format(logout_url.url))
+    logger.debug("Logout URL: {}".format(logout_url.url))
     return logout_url.url
 
 
-def dbmi_http_headers(request, content_type='application/json', **kwargs):
+def dbmi_http_headers(request, content_type="application/json", **kwargs):
     """
     Returns headers to be used for API calls to DBMI services in order to authenticate the caller
     :param request: The Django request
@@ -212,7 +213,7 @@ def dbmi_http_headers(request, content_type='application/json', **kwargs):
     token = get_jwt(request)
 
     # Return headers
-    headers = {'Authorization': '{}{}'.format(dbmi_settings.JWT_HTTP_PREFIX, token), 'Content-Type': content_type}
+    headers = {"Authorization": "{}{}".format(dbmi_settings.JWT_HTTP_PREFIX, token), "Content-Type": content_type}
 
     # Add any additional parameters
     headers.update(kwargs)
@@ -227,15 +228,18 @@ def get_jwt(request):
     :return: The JWT, if found
     """
     # Get the JWT token depending on request type
-    if hasattr(request, 'COOKIES') and request.COOKIES.get(dbmi_settings.JWT_COOKIE_NAME):
+    if hasattr(request, "COOKIES") and request.COOKIES.get(dbmi_settings.JWT_COOKIE_NAME):
         return request.COOKIES.get(dbmi_settings.JWT_COOKIE_NAME)
 
     # Check if JWT in HTTP Authorization header
-    elif hasattr(request, 'META') and request.META.get('HTTP_AUTHORIZATION') and dbmi_settings.JWT_HTTP_PREFIX \
-            in request.META.get('HTTP_AUTHORIZATION'):
+    elif (
+        hasattr(request, "META")
+        and request.META.get("HTTP_AUTHORIZATION")
+        and dbmi_settings.JWT_HTTP_PREFIX in request.META.get("HTTP_AUTHORIZATION")
+    ):
 
         # Remove prefix and return the token
-        return request.META.get('HTTP_AUTHORIZATION').replace(dbmi_settings.JWT_HTTP_PREFIX, '')
+        return request.META.get("HTTP_AUTHORIZATION").replace(dbmi_settings.JWT_HTTP_PREFIX, "")
 
     return None
 
@@ -258,28 +262,28 @@ def get_jwt_value(request, key, verify=True):
     # Get the payload from above
     payload = get_jwt_payload(request, verify)
     if not payload:
-        logger.debug('JWT is invalid, cannot fetch values')
+        logger.debug("JWT is invalid, cannot fetch values")
         return None
 
     return payload.get(key)
 
 
 def get_jwt_username(request, verify=True):
-    return get_jwt_value(request, 'sub', verify)
+    return get_jwt_value(request, "sub", verify)
 
 
 def get_jwt_email(request, verify=True):
-    return get_jwt_value(request, 'email', verify)
+    return get_jwt_value(request, "email", verify)
 
 
 def validate_request(request):
-    '''
+    """
     Pulls the current cookie and verifies the JWT and
     then returns the JWT payload. Returns None
     if the JWT is invalid or missing.
     :param request: The Django request object
     :return: dict
-    '''
+    """
 
     # Extract JWT token into a string.
     jwt_string = get_jwt(request)
@@ -292,55 +296,54 @@ def validate_request(request):
     # Determine which Auth0 Client ID (aud) this JWT pertains to.
     try:
         unverified_header = jwt.get_unverified_header(str(jwt_string))
-        algorithm = unverified_header.get('alg', 'rs256').lower()
+        algorithm = unverified_header.get("alg", "rs256").lower()
 
         # Check algorithm
-        if algorithm == 'hs256':
+        if algorithm == "hs256":
             return validate_hs256_jwt(jwt_string)
 
-        elif algorithm == 'rs256':
+        elif algorithm == "rs256":
             return validate_rs256_jwt(jwt_string)
 
         else:
-            logger.warning(f'Unsupported JWT algorithm: {algorithm}')
+            logger.warning(f"Unsupported JWT algorithm: {algorithm}")
             return None
 
     except Exception as e:
-        logger.exception('Validate error: {}'.format(e), exc_info=True,
-                         extra={'algorithm': algorithm})
+        logger.exception("Validate error: {}".format(e), exc_info=True, extra={"algorithm": algorithm})
 
     return None
 
 
 def get_public_keys_from_auth0(tenant, refresh=False):
-    '''
+    """
     Retrieves the public key from Auth0 to verify JWTs. Will
     cache the JSON response from Auth0 in Django settings
     until instructed to refresh the JWKS.
     :param tenant: The Auth0 tenant to fetch JWKs for
     :param refresh: Purges cached JWK and fetches from remote
     :return: dict
-    '''
+    """
 
     # If refresh, delete cached key
     if refresh:
-        logger.debug('Refresh requested, deleting cached JWKs')
-        delattr(dbmi_settings, f'{CACHED_JWKS_KEY}{tenant}')
+        logger.debug("Refresh requested, deleting cached JWKs")
+        delattr(dbmi_settings, f"{CACHED_JWKS_KEY}{tenant}")
 
     try:
         # Look in settings
-        if hasattr(dbmi_settings, f'{CACHED_JWKS_KEY}{tenant}'):
+        if hasattr(dbmi_settings, f"{CACHED_JWKS_KEY}{tenant}"):
 
             # Parse the cached dict and return it
-            return json.loads(getattr(dbmi_settings, f'{CACHED_JWKS_KEY}{tenant}'))
+            return json.loads(getattr(dbmi_settings, f"{CACHED_JWKS_KEY}{tenant}"))
 
         else:
 
-            logger.debug('Fetching remote JWKS')
+            logger.debug("Fetching remote JWKS")
 
             # Build the JWKs URL
-            url = furl().set(scheme='https', host='{}.auth0.com'.format(tenant))
-            url.path.segments.extend(['.well-known', 'jwks.json'])
+            url = furl().set(scheme="https", host="{}.auth0.com".format(tenant))
+            url.path.segments.extend([".well-known", "jwks.json"])
 
             # Make the request
             response = requests.get(url.url)
@@ -350,24 +353,24 @@ def get_public_keys_from_auth0(tenant, refresh=False):
             jwks = response.json()
 
             # Cache it
-            setattr(dbmi_settings, f'{CACHED_JWKS_KEY}{tenant}', json.dumps(jwks))
+            setattr(dbmi_settings, f"{CACHED_JWKS_KEY}{tenant}", json.dumps(jwks))
 
             return jwks
 
     except KeyError as e:
-        logger.exception(f'Error getting public keys: {e}', exc_info=True, extra={'tenant': tenant})
+        logger.exception(f"Error getting public keys: {e}", exc_info=True, extra={"tenant": tenant})
 
     except json.JSONDecodeError as e:
-        logger.exception(f'Error getting public keys: {e}', exc_info=True, extra={'tenant': tenant})
+        logger.exception(f"Error getting public keys: {e}", exc_info=True, extra={"tenant": tenant})
 
     except requests.HTTPError as e:
-        logger.exception(f'Error getting public keys: {e}', exc_info=True, extra={'tenant': tenant})
+        logger.exception(f"Error getting public keys: {e}", exc_info=True, extra={"tenant": tenant})
 
     return None
 
 
 def retrieve_public_key(tenant, jwt_string):
-    '''
+    """
     Gets the public key used to sign the JWT from the public JWK
     hosted on Auth0. Auth0 typically only returns one public key
     in the JWK set but to handle situations in which signing keys
@@ -382,62 +385,56 @@ def retrieve_public_key(tenant, jwt_string):
     :param tenant: The Auth0 tenant to fetch JWKs for
     :param jwt_string: The JWT token as a string
     :return: str
-    '''
+    """
 
     try:
         # Get the JWK
         jwks = get_public_keys_from_auth0(tenant, refresh=False)
         if not jwks:
-            logger.debug('Could not fetch JWKs from Auth0, just fail out now')
+            logger.debug("Could not fetch JWKs from Auth0, just fail out now")
             return None
 
         # Decode the JWTs header component
         unverified_header = jwt.get_unverified_header(str(jwt_string))
 
         # Check the JWK for the key the JWT was signed with
-        rsa_key = get_rsa_from_jwks(jwks, unverified_header['kid'])
+        rsa_key = get_rsa_from_jwks(jwks, unverified_header["kid"])
         if not rsa_key:
-            logger.debug('No matching key found in JWKS, refreshing')
-            logger.debug('Unverified JWT key id: {}'.format(unverified_header['kid']))
-            logger.debug('Cached JWK keys: {}'.format([jwk['kid'] for jwk in jwks['keys']]))
+            logger.debug("No matching key found in JWKS, refreshing")
+            logger.debug("Unverified JWT key id: {}".format(unverified_header["kid"]))
+            logger.debug("Cached JWK keys: {}".format([jwk["kid"] for jwk in jwks["keys"]]))
 
             # No match found, refresh the jwks
             jwks = get_public_keys_from_auth0(tenant, refresh=True)
-            logger.debug('Refreshed JWK keys: {}'.format([jwk['kid'] for jwk in jwks['keys']]))
+            logger.debug("Refreshed JWK keys: {}".format([jwk["kid"] for jwk in jwks["keys"]]))
 
             # Try it again
-            rsa_key = get_rsa_from_jwks(jwks, unverified_header['kid'])
+            rsa_key = get_rsa_from_jwks(jwks, unverified_header["kid"])
             if not rsa_key:
-                logger.warning('Invalid JWT attempt', extra={'unverified_kid': unverified_header['kid']})
+                logger.warning("Invalid JWT attempt", extra={"unverified_kid": unverified_header["kid"]})
                 return None
 
         return rsa_key
 
     except KeyError as e:
-        logger.exception('Error retrieving public keys: {}'.format(e), exc_info=True, extra={'tenant': tenant})
+        logger.exception("Error retrieving public keys: {}".format(e), exc_info=True, extra={"tenant": tenant})
 
     return None
 
 
 def get_rsa_from_jwks(jwks, jwt_kid):
-    '''
+    """
     Searches the JWKS for the signing key used
     for the JWT. Returns a dict of the JWK
     properties if found, None otherwise.
     :param jwks: The set of JWKs from Auth0
     :param jwt_kid: The key ID of the signing key
     :return: dict
-    '''
+    """
     # Build the dict containing rsa values
     for key in jwks["keys"]:
         if key["kid"] == jwt_kid:
-            rsa_key = {
-                "kty": key["kty"],
-                "kid": key["kid"],
-                "use": key["use"],
-                "n": key["n"],
-                "e": key["e"]
-            }
+            rsa_key = {"kty": key["kty"], "kid": key["kid"], "use": key["use"], "n": key["n"], "e": key["e"]}
 
             return rsa_key
 
@@ -446,37 +443,37 @@ def get_rsa_from_jwks(jwks, jwt_kid):
 
 
 def validate_rs256_jwt(jwt_string):
-    '''
+    """
     Verifies the given RS256 JWT. Returns the payload
     if verified, otherwise returns None.
     :param jwt_string: JWT as a string
     :return: dict
-    '''
+    """
     # We need the public key and the client ID to match against
     jwk_pub_key = None
     jwt_client_id = None
 
     # Determine which Auth0 Client ID (aud) this JWT pertains to.
     try:
-        jwt_client_id = str(jwt.decode(jwt_string, verify=False)['aud'])
+        jwt_client_id = str(jwt.decode(jwt_string, verify=False)["aud"])
 
         # Check if multiple clients are specified at the client level
-        if hasattr(dbmi_settings, 'AUTH0_CLIENTS') and getattr(dbmi_settings, 'AUTH0_CLIENTS'):
+        if hasattr(dbmi_settings, "AUTH0_CLIENTS") and getattr(dbmi_settings, "AUTH0_CLIENTS"):
 
             # Search client IDs
-            tenant = dbmi_settings.AUTH0_CLIENTS.get(jwt_client_id, {}).get('tenant')
+            tenant = dbmi_settings.AUTH0_CLIENTS.get(jwt_client_id, {}).get("tenant")
             if tenant:
-                logger.debug(f'JWT Client ID matched to tenant: {tenant}')
+                logger.debug(f"JWT Client ID matched to tenant: {tenant}")
 
                 # Get the public key
                 jwk_pub_key = retrieve_public_key(tenant, jwt_string)
 
             # Log if not found
             else:
-                logger.info(f'JWT client {jwt_client_id} could not be matched to any clients')
+                logger.info(f"JWT client {jwt_client_id} could not be matched to any clients")
 
         # Check for multiple clients at the tenant level
-        if not jwk_pub_key and hasattr(dbmi_settings, 'AUTH0_TENANTS') and getattr(dbmi_settings, 'AUTH0_TENANTS'):
+        if not jwk_pub_key and hasattr(dbmi_settings, "AUTH0_TENANTS") and getattr(dbmi_settings, "AUTH0_TENANTS"):
 
             # Try each one
             for tenant in dbmi_settings.AUTH0_TENANTS:
@@ -491,8 +488,9 @@ def validate_rs256_jwt(jwt_string):
                 except PermissionDenied:
                     pass
             else:
-                logger.info(f'JWT client {jwt_client_id} could not be matched to '
-                            f'any tenants: {dbmi_settings.AUTH0_TENANTS}')
+                logger.info(
+                    f"JWT client {jwt_client_id} could not be matched to " f"any tenants: {dbmi_settings.AUTH0_TENANTS}"
+                )
 
         # If not already matched, try default client
         if not jwk_pub_key and jwt_client_id == dbmi_settings.AUTH0_CLIENT_ID:
@@ -501,12 +499,15 @@ def validate_rs256_jwt(jwt_string):
             jwk_pub_key = retrieve_public_key(dbmi_settings.AUTH0_TENANT, jwt_string)
 
         if not jwk_pub_key:
-            logger.warning(f'JWT Client ID could not be matched: {jwt_client_id}')
+            logger.warning(f"JWT Client ID could not be matched: {jwt_client_id}")
             return None
 
     except Exception as e:
-        logger.exception(f'Failed to get the aud from jwt payload: {e}', exc_info=True,
-                         extra={'jwt_client_id': jwt_client_id, 'jwk_pub_key': jwk_pub_key})
+        logger.exception(
+            f"Failed to get the aud from jwt payload: {e}",
+            exc_info=True,
+            extra={"jwt_client_id": jwt_client_id, "jwk_pub_key": jwk_pub_key},
+        )
         return None
 
     # Attempt to validate with each one
@@ -517,75 +518,92 @@ def validate_rs256_jwt(jwt_string):
 
         # Attempt to validate the JWT (Checks both expiry and signature)
         try:
-            payload = jwt.decode(jwt_string,
-                                 jwk_key.export_to_pem(private_key=False),
-                                 algorithms=['RS256'],
-                                 leeway=120,
-                                 audience=jwt_client_id)
+            payload = jwt.decode(
+                jwt_string,
+                jwk_key.export_to_pem(private_key=False),
+                algorithms=["RS256"],
+                leeway=120,
+                audience=jwt_client_id,
+            )
 
             return payload
 
         except jwt.ExpiredSignatureError as e:
-            logger.debug("JWT Expired: {}".format(e), extra={
-                'jwt_client_id': jwt_client_id, 'jwk_pub_key': jwk_pub_key
-            })
+            logger.debug(
+                "JWT Expired: {}".format(e), extra={"jwt_client_id": jwt_client_id, "jwk_pub_key": jwk_pub_key}
+            )
 
         except jwt.InvalidTokenError as e:
-            logger.info("Invalid JWT Token: {}".format(e), extra={
-                'jwt_client_id': jwt_client_id, 'jwk_pub_key': jwk_pub_key
-            })
+            logger.info(
+                "Invalid JWT Token: {}".format(e), extra={"jwt_client_id": jwt_client_id, "jwk_pub_key": jwk_pub_key}
+            )
 
         except Exception as e:
-            logger.exception(f'Error validating JWT: {e}', exc_info=True, extra={
-                'jwt_client_id': jwt_client_id, 'jwk_pub_key': jwk_pub_key
-            })
+            logger.exception(
+                f"Error validating JWT: {e}",
+                exc_info=True,
+                extra={"jwt_client_id": jwt_client_id, "jwk_pub_key": jwk_pub_key},
+            )
 
     return None
 
 
 def validate_hs256_jwt(jwt_string):
-    '''
+    """
     Verifies the given HS256 JWT. Returns the payload
     if verified, otherwise returns None.
     :param jwt_string: JWT as a string
     :return: dict
-    '''
+    """
 
     # Check settings for proper setup
     if not dbmi_settings.AUTH0_SECRET or not dbmi_settings.AUTH0_CLIENT_ID:
-        logger.error('Cannot verify HS256 tokens without client ID and client secret')
+        logger.error("Cannot verify HS256 tokens without client ID and client secret")
         raise PermissionDenied
 
     # Determine which Auth0 Client ID (aud) this JWT pertains to.
     jwt_client_id = None
     try:
-        jwt_client_id = str(jwt.decode(jwt_string, verify=False)['aud'])
+        jwt_client_id = str(jwt.decode(jwt_string, verify=False)["aud"])
 
         # Perform the validation
-        payload = jwt.decode(jwt_string,
-                             base64.b64decode(dbmi_settings.AUTH0_SECRET, '-_'),
-                             algorithms=['HS256'],
-                             leeway=120,
-                             audience=jwt_client_id)
+        payload = jwt.decode(
+            jwt_string,
+            base64.b64decode(dbmi_settings.AUTH0_SECRET, "-_"),
+            algorithms=["HS256"],
+            leeway=120,
+            audience=jwt_client_id,
+        )
 
         return payload
 
     except jwt.ExpiredSignatureError as e:
-        logger.debug("JWT Expired: {}".format(e), extra={
-            'jwt_client_id': jwt_client_id,
-        })
+        logger.debug(
+            "JWT Expired: {}".format(e),
+            extra={
+                "jwt_client_id": jwt_client_id,
+            },
+        )
 
     except jwt.InvalidTokenError as e:
-        logger.info("Invalid JWT Token: {}".format(e), extra={
-            'jwt_client_id': jwt_client_id,
-        })
+        logger.info(
+            "Invalid JWT Token: {}".format(e),
+            extra={
+                "jwt_client_id": jwt_client_id,
+            },
+        )
 
     except Exception as e:
-        logger.exception(f'Error validating JWT: {e}', exc_info=True, extra={
-            'jwt_client_id': jwt_client_id,
-        })
+        logger.exception(
+            f"Error validating JWT: {e}",
+            exc_info=True,
+            extra={
+                "jwt_client_id": jwt_client_id,
+            },
+        )
 
     return None
+
 
 ###################################################################
 #
@@ -595,7 +613,6 @@ def validate_hs256_jwt(jwt_string):
 
 
 class DBMIAuthenticationBackend(object):
-
     def authenticate(self, request, token=None):
         """
         All versions of this backend follow the same flow:
@@ -617,10 +634,10 @@ class DBMIAuthenticationBackend(object):
             return None
 
         # Get their email and check for their record
-        email = payload.get('email')
-        username = payload.get('sub')
+        email = payload.get("email")
+        username = payload.get("sub")
         if not email or not username:
-            logger.error('No sub or email in valid JWT: {}'.format(payload))
+            logger.error("No sub or email in valid JWT: {}".format(payload))
             return None
 
         # The JWT is valid, now get the user object to attach to the request
@@ -639,7 +656,7 @@ class DBMIAuthenticationBackend(object):
 
     def get_user(self, user_id):
         # Should be implemented by subclass depending on data source for user
-        raise SystemError('This method should not be called')
+        raise SystemError("This method should not be called")
 
     def has_perm(self, user, perm, obj):
         """
@@ -662,7 +679,7 @@ class DBMIAuthenticationBackend(object):
         otherwise an instance of DBMIUser
         """
         # Should be implemented by subclass depending on data source for user
-        raise SystemError('This method should not be called')
+        raise SystemError("This method should not be called")
 
     def _create_user(self, request):
         """
@@ -670,7 +687,7 @@ class DBMIAuthenticationBackend(object):
         model.
         """
         # Should be implemented by subclass depending on data source for user
-        raise SystemError('This method should not be called')
+        raise SystemError("This method should not be called")
 
     def _sync_user(self, request, user):
         """
@@ -684,24 +701,33 @@ class DBMIAuthenticationBackend(object):
             payload = get_jwt_payload(request, verify=False)
 
             # Get properties
-            username = payload['sub'].lower()
-            email = payload['email'].lower()
+            username = payload["sub"].lower()
+            email = payload["email"].lower()
 
             # Check if email or username missing
             if not user.username.lower() == username:
-                logger.debug('User\'s username did not match JWT: {} -> {}'.format(user.username, username))
+                logger.debug("User's username did not match JWT: {} -> {}".format(user.username, username))
                 user.username = username
 
             if not user.email.lower() == email:
-                logger.error('User\'s email did not match JWT: {} -> {}'.format(user.email, email), extra={
-                    'request': request, 'username': user.username, 'email': user.email, 'jwt_username': username,
-                    'jwt_email': email,
-                })
+                logger.error(
+                    "User's email did not match JWT: {} -> {}".format(user.email, email),
+                    extra={
+                        "request": request,
+                        "username": user.username,
+                        "email": user.email,
+                        "jwt_username": username,
+                        "jwt_email": email,
+                    },
+                )
                 raise PermissionDenied
 
         except Exception as e:
-            logger.exception('User syncing error: {}'.format(e), exc_info=True,
-                             extra={'request': request, 'user': user, 'username': username, 'email': email})
+            logger.exception(
+                "User syncing error: {}".format(e),
+                exc_info=True,
+                extra={"request": request, "user": user, "username": username, "email": email},
+            )
 
 
 class DBMIJWTAuthenticationBackend(DBMIAuthenticationBackend):
@@ -712,6 +738,7 @@ class DBMIJWTAuthenticationBackend(DBMIAuthenticationBackend):
     contrib.auth.models.User model, but with no persistence. All properties will be valid but any attempt to
     save or link these instances to another model instance will fail.
     """
+
     def _get_user_object(self, request):
         """
         Accepts details from the JWT user and returns an object representing
@@ -744,6 +771,7 @@ class DBMIJWTAdminAuthenticationBackend(DBMIAuthenticationBackend):
     save or link these instances to another model instance will fail. DBMI AuthZ is consulted for staff/superuser
     access and the User object is prepared as such.
     """
+
     def _get_user_object(self, request):
         """
         Accepts details from the JWT user and returns an object representing
@@ -773,8 +801,9 @@ class DBMIJWTAdminAuthenticationBackend(DBMIAuthenticationBackend):
                 user.is_superuser = False
 
         except Exception as e:
-            logger.exception('User syncing error: {}'.format(e), exc_info=True,
-                             extra={'user': user, 'request': request})
+            logger.exception(
+                "User syncing error: {}".format(e), exc_info=True, extra={"user": user, "request": request}
+            )
 
 
 class DBMIModelAuthenticationBackend(DBMIAuthenticationBackend):
@@ -791,7 +820,7 @@ class DBMIModelAuthenticationBackend(DBMIAuthenticationBackend):
         Reject users with is_active=False. Custom user models that don't have
         that attribute are allowed.
         """
-        is_active = getattr(user, 'is_active', None)
+        is_active = getattr(user, "is_active", None)
         return is_active or is_active is None
 
     def get_user(self, user_id):
@@ -818,9 +847,9 @@ class DBMIModelAuthenticationBackend(DBMIAuthenticationBackend):
         UserModel = django_auth.get_user_model()
 
         # Find the user
-        users = UserModel.objects.filter(Q(username=username) | Q(email=email)).order_by('-date_joined')
+        users = UserModel.objects.filter(Q(username=username) | Q(email=email)).order_by("-date_joined")
         if not users:
-            logger.debug('User does not yet exist: {} : {}'.format(username, email))
+            logger.debug("User does not yet exist: {} : {}".format(username, email))
             return None
 
         # Get first user
@@ -828,12 +857,14 @@ class DBMIModelAuthenticationBackend(DBMIAuthenticationBackend):
 
         # Check for duplicate users (on email)
         if len(users) > 1:
-            logger.error('Found {} users for {} : {}'.format(len(users), email, ','.join([u.username for u in users])),
-                         extra={'request': request, 'users': json.dumps(UserSerializer(users, many=True).data)})
-            logger.debug('Returning oldest user: {} : {}'.format(user.username, user.email))
+            logger.error(
+                "Found {} users for {} : {}".format(len(users), email, ",".join([u.username for u in users])),
+                extra={"request": request, "users": json.dumps(UserSerializer(users, many=True).data)},
+            )
+            logger.debug("Returning oldest user: {} : {}".format(user.username, user.email))
 
         else:
-            logger.debug('Found user: {} : {}'.format(username, email))
+            logger.debug("Found user: {} : {}".format(username, email))
 
         return user
 
@@ -844,7 +875,7 @@ class DBMIModelAuthenticationBackend(DBMIAuthenticationBackend):
         """
         # Check if autocreate is enabled
         if not dbmi_settings.USER_MODEL_AUTOCREATE:
-            logger.debug('User autocreate is disabled, boot the current user')
+            logger.debug("User autocreate is disabled, boot the current user")
             raise PermissionDenied
 
         # Get username and email
@@ -855,7 +886,7 @@ class DBMIModelAuthenticationBackend(DBMIAuthenticationBackend):
         UserModel = django_auth.get_user_model()
         user = UserModel(username=username, email=email)
         user.set_unusable_password()
-        logger.debug('Created user: {}:{}'.format(username, email))
+        logger.debug("Created user: {}:{}".format(username, email))
 
         # Sync them up
         self._sync_user(request, user)
@@ -874,27 +905,36 @@ class DBMIModelAuthenticationBackend(DBMIAuthenticationBackend):
             payload = get_jwt_payload(request, verify=False)
 
             # Get properties
-            username = payload['sub'].lower()
-            email = payload['email'].lower()
+            username = payload["sub"].lower()
+            email = payload["email"].lower()
 
             # Check if email or username missing
             if not user.username.lower() == username:
-                logger.debug('User\'s username did not match JWT: {} -> {}'.format(user.username, username))
+                logger.debug("User's username did not match JWT: {} -> {}".format(user.username, username))
                 user.username = username
 
             if not user.email.lower() == email:
-                logger.error('User\'s email did not match JWT: {} -> {}'.format(user.email, email), extra={
-                    'request': request, 'username': user.username, 'email': user.email, 'jwt_username': username,
-                    'jwt_email': email,
-                })
+                logger.error(
+                    "User's email did not match JWT: {} -> {}".format(user.email, email),
+                    extra={
+                        "request": request,
+                        "username": user.username,
+                        "email": user.email,
+                        "jwt_username": username,
+                        "jwt_email": email,
+                    },
+                )
                 raise PermissionDenied
 
             # Save
             user.save()
 
         except Exception as e:
-            logger.exception('User syncing error: {}'.format(e), exc_info=True,
-                             extra={'request': request, 'user': user, 'username': username, 'email': email})
+            logger.exception(
+                "User syncing error: {}".format(e),
+                exc_info=True,
+                extra={"request": request, "user": user, "username": username, "email": email},
+            )
 
 
 class DBMIUsersModelAuthenticationBackend(DBMIModelAuthenticationBackend):
@@ -921,7 +961,7 @@ class DBMIUsersModelAuthenticationBackend(DBMIModelAuthenticationBackend):
             # Check if admin
             is_admin = authz.is_admin(request, user.email)
             if is_admin:
-                logger.debug(f'User: {user.email} has been granted admin/superuser privileges')
+                logger.debug(f"User: {user.email} has been granted admin/superuser privileges")
 
             # Ensure the model is updated
             user.is_staff = is_admin
@@ -929,9 +969,17 @@ class DBMIUsersModelAuthenticationBackend(DBMIModelAuthenticationBackend):
             user.save()
 
         except Exception as e:
-            logger.exception('Superuser syncing error: {}'.format(e), exc_info=True,
-                             extra={'request': request, 'user': user, 'username': user.username, 'email': user.email,
-                                    'is_admin': is_admin})
+            logger.exception(
+                "Superuser syncing error: {}".format(e),
+                exc_info=True,
+                extra={
+                    "request": request,
+                    "user": user,
+                    "username": user.username,
+                    "email": user.email,
+                    "is_admin": is_admin,
+                },
+            )
 
 
 class DBMIAdminModelAuthenticationBackend(DBMIModelAuthenticationBackend):
@@ -962,7 +1010,7 @@ class DBMIAdminModelAuthenticationBackend(DBMIModelAuthenticationBackend):
         UserModel = django_auth.get_user_model()
         user = UserModel(username=username, email=email)
         user.set_unusable_password()
-        logger.debug('Created user: {}:{}'.format(username, email))
+        logger.debug("Created user: {}:{}".format(username, email))
 
         # Sync them up
         self._sync_user(request, user, is_admin=True)
@@ -1012,16 +1060,25 @@ class DBMISuperuserModelAuthenticationBackend(DBMIAdminModelAuthenticationBacken
 
             # If not admin (indicates they used to be), save and raise exception
             if not is_admin:
-                logger.debug('User was superuser, but is now missing authz, booting them: {}'.format(user.username))
+                logger.debug("User was superuser, but is now missing authz, booting them: {}".format(user.username))
                 raise PermissionDenied
 
         except Exception as e:
-            logger.exception('Superuser syncing error: {}'.format(e), exc_info=True,
-                             extra={'request': request, 'user': user, 'username': user.username, 'email': user.email,
-                                    'is_admin': is_admin})
+            logger.exception(
+                "Superuser syncing error: {}".format(e),
+                exc_info=True,
+                extra={
+                    "request": request,
+                    "user": user,
+                    "username": user.username,
+                    "email": user.email,
+                    "is_admin": is_admin,
+                },
+            )
 
-            logger.debug('Encountered an issue and could not check admin/superuser status: defaulting to access denied')
+            logger.debug("Encountered an issue and could not check admin/superuser status: defaulting to access denied")
             raise PermissionDenied
+
 
 ###################################################################
 #
@@ -1036,6 +1093,7 @@ class DBMIJWTUser(AnonymousUser):
     users to the store. It provides a request.user object to access user properties
     but will throw exceptions if ever used in the context of database operations.
     """
+
     email = None
     username = None
     id = None
@@ -1052,15 +1110,15 @@ class DBMIJWTUser(AnonymousUser):
         self.jwt = get_jwt(request)
 
         # Set properties
-        self.username = payload.get('sub')
-        self.id = payload.get('sub')
-        self.email = payload.get('email')
+        self.username = payload.get("sub")
+        self.id = payload.get("sub")
+        self.email = payload.get("email")
 
     def __str__(self):
         return self.id
 
     def __eq__(self, other):
-        return hasattr(other, 'id') and self.id == other.id
+        return hasattr(other, "id") and self.id == other.id
 
     def __hash__(self):
         return hash(self.id)
@@ -1140,7 +1198,7 @@ def _user_has_perm(user, perm, obj):
     A backend can raise `PermissionDenied` to short-circuit permission checking.
     """
     for backend in django_auth.get_backends():
-        if not hasattr(backend, 'has_perm'):
+        if not hasattr(backend, "has_perm"):
             continue
         try:
             if backend.has_perm(user, perm, obj):
@@ -1155,7 +1213,7 @@ def _user_has_module_perms(user, app_label):
     A backend can raise `PermissionDenied` to short-circuit permission checking.
     """
     for backend in django_auth.get_backends():
-        if not hasattr(backend, 'has_module_perms'):
+        if not hasattr(backend, "has_module_perms"):
             continue
         try:
             if backend.has_module_perms(user, app_label):
@@ -1163,6 +1221,7 @@ def _user_has_module_perms(user, app_label):
         except PermissionDenied:
             return False
     return False
+
 
 ###################################################################
 #
@@ -1175,6 +1234,7 @@ class DBMIUser(BaseAuthentication):
     """
     Authentication method for DBMI API methods
     """
+
     def authenticate(self, request):
 
         # Get the JWT
@@ -1189,13 +1249,14 @@ class DBMIUser(BaseAuthentication):
 
         # Return the user's email to attach to the request object (request.user)
         # Also, return the authz dictionary contained in the JWT claims, if present (request.auth)
-        return payload.get('email'), payload.get(dbmi_settings.JWT_AUTHZ_NAMESPACE)
+        return payload.get("email"), payload.get(dbmi_settings.JWT_AUTHZ_NAMESPACE)
 
 
 class DBMIModelUser(BaseAuthentication):
     """
     Authentication method for DBMI API methods
     """
+
     def authenticate(self, request):
 
         # Get the JWT
@@ -1214,7 +1275,7 @@ class DBMIModelUser(BaseAuthentication):
         if dbmi_settings.JWT_AUTHZ_NAMESPACE:
 
             # User has a valid JWT from SciAuth
-            auth = get_jwt_payload(request, verify=False).get('JWT_AUTHZ_NAMESPACE')
+            auth = get_jwt_payload(request, verify=False).get("JWT_AUTHZ_NAMESPACE")
 
         # Return the user's email to attach to the request object (request.user)
         # Also, return the authz dictionary contained in the JWT claims, if present (request.auth)
