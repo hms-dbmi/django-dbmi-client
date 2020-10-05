@@ -10,19 +10,19 @@ from django_nose import NoseTestSuiteRunner
 from django.conf import settings
 
 EXTERNAL_APPS = [
-    'django.contrib.admin',
-    'django.contrib.admindocs',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.messages',
-    'django.contrib.sessions',
-    'django.contrib.staticfiles',
-    'django.contrib.sitemaps',
-    'django.contrib.sites',
+    "django.contrib.admin",
+    "django.contrib.admindocs",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.messages",
+    "django.contrib.sessions",
+    "django.contrib.staticfiles",
+    "django.contrib.sitemaps",
+    "django.contrib.sites",
 ]
 INTERNAL_APPS = [
-    'django_nose',
-    'dbmi_client',
+    "django_nose",
+    "dbmi_client",
 ]
 INSTALLED_APPS = EXTERNAL_APPS + INTERNAL_APPS
 
@@ -39,7 +39,7 @@ if not settings.configured:
             "CLIENT": "DBMI-Client",
             "ENVIRONMENT": "prod",
             "AUTH0_TENANTS": "hms-dbmi",
-        }
+        },
     )
 
 
@@ -47,5 +47,5 @@ def main(*test_args):
     sys.exit(NoseTestSuiteRunner(verbosity=2, interactive=True).run_tests(test_args))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main(*sys.argv[1:])

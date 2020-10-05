@@ -6,36 +6,36 @@ def config(service, sentry=True, root_level=logging.WARNING):
 
     # Set the standard configurations
     config = {
-        'version': 1,
-        'disable_existing_loggers': False,
-        'formatters': {
-            'console': {
-                'format': f'[DJANGO] - [{service.upper()}] - [%(asctime)s][%(levelname)s]'
-                          f'[%(name)s.%(funcName)s:%(lineno)d] - %(message)s',
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            "console": {
+                "format": f"[DJANGO] - [{service.upper()}] - [%(asctime)s][%(levelname)s]"
+                f"[%(name)s.%(funcName)s:%(lineno)d] - %(message)s",
             },
         },
-        'handlers': {
-            'console': {
-                'level': 'DEBUG',
-                'class': 'logging.StreamHandler',
-                'formatter': 'console',
-                'stream': sys.stdout,
+        "handlers": {
+            "console": {
+                "level": "DEBUG",
+                "class": "logging.StreamHandler",
+                "formatter": "console",
+                "stream": sys.stdout,
             },
         },
-        'root': {
-            'handlers': ['console'],
-            'level': logging.getLevelName(root_level),
+        "root": {
+            "handlers": ["console"],
+            "level": logging.getLevelName(root_level),
         },
-        'loggers': {
-            'django': {
-                'handlers': ['console'],
-                'level': 'WARNING',
-                'propagate': True,
+        "loggers": {
+            "django": {
+                "handlers": ["console"],
+                "level": "WARNING",
+                "propagate": True,
             },
-            'django.request': {
-                'handlers': ['console'],
-                'level': 'ERROR',
-                'propagate': True,
+            "django.request": {
+                "handlers": ["console"],
+                "level": "ERROR",
+                "propagate": True,
             },
         },
     }
@@ -44,24 +44,24 @@ def config(service, sentry=True, root_level=logging.WARNING):
     if sentry:
 
         # Add the handler
-        config['handlers']['sentry'] = {
-            'level': 'ERROR',  # To capture more than ERROR, change to WARNING, INFO, etc.
-            'class': 'raven.contrib.django.raven_compat.handlers.SentryHandler',
-            'tags': {'custom-tag': 'x'},
+        config["handlers"]["sentry"] = {
+            "level": "ERROR",  # To capture more than ERROR, change to WARNING, INFO, etc.
+            "class": "raven.contrib.django.raven_compat.handlers.SentryHandler",
+            "tags": {"custom-tag": "x"},
         }
-        config['root']['handlers'].append('sentry')
+        config["root"]["handlers"].append("sentry")
 
         # Add the loggers
-        config['loggers']['raven'] = {
-            'level': 'WARNING',
-            'handlers': ['console'],
-            'propagate': False,
+        config["loggers"]["raven"] = {
+            "level": "WARNING",
+            "handlers": ["console"],
+            "propagate": False,
         }
 
-        config['loggers']['sentry.errors'] = {
-            'level': 'WARNING',
-            'handlers': ['console'],
-            'propagate': False,
+        config["loggers"]["sentry.errors"] = {
+            "level": "WARNING",
+            "handlers": ["console"],
+            "propagate": False,
         }
 
     return config
@@ -96,11 +96,11 @@ def add_level(levelName, levelNum, methodName=None):
         methodName = levelName.lower()
 
     if hasattr(logging, levelName):
-       raise AttributeError('{} already defined in logging module'.format(levelName))
+        raise AttributeError("{} already defined in logging module".format(levelName))
     if hasattr(logging, methodName):
-       raise AttributeError('{} already defined in logging module'.format(methodName))
+        raise AttributeError("{} already defined in logging module".format(methodName))
     if hasattr(logging.getLoggerClass(), methodName):
-       raise AttributeError('{} already defined in logger class'.format(methodName))
+        raise AttributeError("{} already defined in logger class".format(methodName))
 
     # This method was inspired by the answers to Stack Overflow post
     # http://stackoverflow.com/q/2183233/2988730, especially
@@ -108,6 +108,7 @@ def add_level(levelName, levelNum, methodName=None):
     def logForLevel(self, message, *args, **kwargs):
         if self.isEnabledFor(levelNum):
             self._log(levelNum, message, args, **kwargs)
+
     def logToRoot(message, *args, **kwargs):
         logging.log(levelNum, message, *args, **kwargs)
 

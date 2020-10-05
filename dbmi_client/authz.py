@@ -9,12 +9,13 @@ from dbmi_client import authn
 
 # Get the app logger
 import logging
+
 logger = logging.getLogger(dbmi_settings.LOGGER_NAME)
 
 # Set keys for authz dictionary
-JWT_AUTHZ_GROUPS = 'groups'
-JWT_AUTHZ_ROLES = 'roles'
-JWT_AUTHZ_PERMISSIONS = 'permissions'
+JWT_AUTHZ_GROUPS = "groups"
+JWT_AUTHZ_ROLES = "roles"
+JWT_AUTHZ_PERMISSIONS = "permissions"
 
 
 def jwt_has_authz(claims, auth_type, item):
@@ -32,7 +33,7 @@ def jwt_has_authz(claims, auth_type, item):
     """
     # Check if enabled
     if not dbmi_settings.JWT_AUTHZ_NAMESPACE:
-        logger.debug('JWT_AUTHZ_NAMESPACE is not defined, JWT AuthZ checks are disabled')
+        logger.debug("JWT_AUTHZ_NAMESPACE is not defined, JWT AuthZ checks are disabled")
         return None
 
     try:
@@ -41,7 +42,7 @@ def jwt_has_authz(claims, auth_type, item):
         return auth_has_authz(auth, auth_type, item)
 
     except (KeyError, IndexError, TypeError, ValueError):
-        logger.debug('No authz and/or authz type ({}) in JWT claims'.format(auth_type))
+        logger.debug("No authz and/or authz type ({}) in JWT claims".format(auth_type))
 
     return None
 
@@ -62,13 +63,13 @@ def auth_has_authz(auth, auth_type, item):
 
             # Compare
             if _item == item:
-                logger.debug('User has authz: {} - {}'.format(auth_type, item))
+                logger.debug("User has authz: {} - {}".format(auth_type, item))
                 return True
 
         return False
 
     except (KeyError, IndexError, TypeError, ValueError):
-        logger.debug('No authz and/or authz type ({})'.format(auth_type))
+        logger.debug("No authz and/or authz type ({})".format(auth_type))
 
     return None
 
@@ -90,14 +91,14 @@ def has_permission(request, email, item, permission, check_parents=False):
     try:
         # Build the request
         url = furl(dbmi_settings.AUTHZ_URL)
-        url.path.segments.append('user_permission')
-        url.path.segments.append('')
-        url.query.params.add('email', email)
-        url.query.params.add('client', dbmi_settings.CLIENT)
+        url.path.segments.append("user_permission")
+        url.path.segments.append("")
+        url.query.params.add("email", email)
+        url.query.params.add("client", dbmi_settings.CLIENT)
 
         # If we are searching parents, we need to fetch all permissions for this user
         if not check_parents:
-            url.query.params.add('item', item)
+            url.query.params.add("item", item)
 
         # Get the JWT token depending on request type
         if type(request) is str:
@@ -110,8 +111,10 @@ def has_permission(request, email, item, permission, check_parents=False):
             return False
 
         # Build headers for the SciAuthZ call
-        headers = {'Authorization': '{}{}'.format(dbmi_settings.JWT_HTTP_PREFIX, token),
-                   'Content-Type': 'application/json'}
+        headers = {
+            "Authorization": "{}{}".format(dbmi_settings.JWT_HTTP_PREFIX, token),
+            "Content-Type": "application/json",
+        }
 
         # Run it
         response = requests.get(url.url, headers=headers)
@@ -119,11 +122,11 @@ def has_permission(request, email, item, permission, check_parents=False):
         response.raise_for_status()
 
         # If checking parents...
-        if check_parents and len(item.split('.')) > 1:
+        if check_parents and len(item.split(".")) > 1:
 
             # ... build list of all parent paths
-            components = item.lower().split('.')
-            items = ['.'.join(components[:i+1]) for i in range(len(components))]
+            components = item.lower().split(".")
+            items = [".".join(components[: i + 1]) for i in range(len(components))]
 
         else:
 
@@ -131,20 +134,23 @@ def has_permission(request, email, item, permission, check_parents=False):
             items = [item.lower()]
 
         # Parse permissions
-        for permission_result in response.json().get('results'):
+        for permission_result in response.json().get("results"):
 
             # Get the items
-            _item = permission_result['item'].lower()
-            _permission = permission_result['permission'].lower()
+            _item = permission_result["item"].lower()
+            _permission = permission_result["permission"].lower()
 
             # Check it
             if _item in items and _permission == permission.lower():
-                logger.debug('DBMIAuthZ: {} has {} on {}'.format(email, permission, item))
+                logger.debug("DBMIAuthZ: {} has {} on {}".format(email, permission, item))
                 return True
 
     except (requests.HTTPError, TypeError, KeyError):
-        logger.error('SciAuthZ permission lookup failed', exc_info=True, extra={
-            'request': request, 'email': email, 'permission': permission, 'url': url, 'content': content})
+        logger.error(
+            "SciAuthZ permission lookup failed",
+            exc_info=True,
+            extra={"request": request, "email": email, "permission": permission, "url": url, "content": content},
+        )
 
     return False
 
@@ -166,14 +172,14 @@ def has_a_permission(request, email, item, permissions, check_parents=False):
     try:
         # Build the request
         url = furl(dbmi_settings.AUTHZ_URL)
-        url.path.segments.append('user_permission')
-        url.path.segments.append('')
-        url.query.params.add('email', email)
-        url.query.params.add('client', dbmi_settings.CLIENT)
+        url.path.segments.append("user_permission")
+        url.path.segments.append("")
+        url.query.params.add("email", email)
+        url.query.params.add("client", dbmi_settings.CLIENT)
 
         # If we are searching parents, we need to fetch all permissions for this user
         if not check_parents:
-            url.query.params.add('item', item)
+            url.query.params.add("item", item)
 
         # Get the JWT token depending on request type
         if type(request) is str:
@@ -186,8 +192,10 @@ def has_a_permission(request, email, item, permissions, check_parents=False):
             return False
 
         # Build headers for the SciAuthZ call
-        headers = {'Authorization': '{}{}'.format(dbmi_settings.JWT_HTTP_PREFIX, token),
-                   'Content-Type': 'application/json'}
+        headers = {
+            "Authorization": "{}{}".format(dbmi_settings.JWT_HTTP_PREFIX, token),
+            "Content-Type": "application/json",
+        }
 
         # Run it
         response = requests.get(url.url, headers=headers)
@@ -195,11 +203,11 @@ def has_a_permission(request, email, item, permissions, check_parents=False):
         response.raise_for_status()
 
         # If checking parents...
-        if check_parents and len(item.split('.')) > 1:
+        if check_parents and len(item.split(".")) > 1:
 
             # ... build list of all parent paths
-            components = item.lower().split('.')
-            items = ['.'.join(components[:i+1]) for i in range(len(components))]
+            components = item.lower().split(".")
+            items = [".".join(components[: i + 1]) for i in range(len(components))]
 
         else:
 
@@ -207,20 +215,23 @@ def has_a_permission(request, email, item, permissions, check_parents=False):
             items = [item.lower()]
 
         # Parse permissions
-        for permission_result in response.json().get('results'):
+        for permission_result in response.json().get("results"):
 
             # Get the items
-            item = permission_result['item'].lower()
-            permission = permission_result['permission'].lower()
+            item = permission_result["item"].lower()
+            permission = permission_result["permission"].lower()
 
             # Check it
             if item in items and permission in map(str.lower, permissions):
-                logger.debug('DBMIAuthZ: {} has {} on {}'.format(email, permission, item))
+                logger.debug("DBMIAuthZ: {} has {} on {}".format(email, permission, item))
                 return True
 
     except (requests.HTTPError, TypeError, KeyError):
-        logger.error('SciAuthZ permission lookup failed', exc_info=True, extra={
-            'request': request, 'email': email, 'permissions': permissions, 'url': url, 'content': content})
+        logger.error(
+            "SciAuthZ permission lookup failed",
+            exc_info=True,
+            extra={"request": request, "email": email, "permissions": permissions, "url": url, "content": content},
+        )
 
     return False
 
@@ -232,14 +243,12 @@ def is_admin(request, email):
     well as the JWT claims, if any.
     """
     # Check least difficult and move forward
-    if jwt_has_authz(authn.get_jwt_payload(request, verify=True),
-                     JWT_AUTHZ_GROUPS,
-                     dbmi_settings.AUTHZ_ADMIN_GROUP):
+    if jwt_has_authz(authn.get_jwt_payload(request, verify=True), JWT_AUTHZ_GROUPS, dbmi_settings.AUTHZ_ADMIN_GROUP):
         return True
 
-    elif jwt_has_authz(authn.get_jwt_payload(request, verify=True),
-                       JWT_AUTHZ_PERMISSIONS,
-                       dbmi_settings.AUTHZ_ADMIN_PERMISSION):
+    elif jwt_has_authz(
+        authn.get_jwt_payload(request, verify=True), JWT_AUTHZ_PERMISSIONS, dbmi_settings.AUTHZ_ADMIN_PERMISSION
+    ):
         return True
 
     elif has_permission(request, email, dbmi_settings.CLIENT, dbmi_settings.AUTHZ_ADMIN_PERMISSION):
@@ -263,14 +272,14 @@ def get_permissions(request, email, item=None):
     try:
         # Build the request
         url = furl(dbmi_settings.AUTHZ_URL)
-        url.path.segments.append('user_permission')
-        url.path.segments.append('')
-        url.query.params.add('email', email)
-        url.query.params.add('client', dbmi_settings.CLIENT)
+        url.path.segments.append("user_permission")
+        url.path.segments.append("")
+        url.query.params.add("email", email)
+        url.query.params.add("client", dbmi_settings.CLIENT)
 
         # Check for specific item
         if item:
-            url.query.params.add('item', item)
+            url.query.params.add("item", item)
 
         # Get the JWT token depending on request type
         if type(request) is str:
@@ -283,19 +292,24 @@ def get_permissions(request, email, item=None):
             return False
 
         # Build headers for the SciAuthZ call
-        headers = {'Authorization': '{}{}'.format(dbmi_settings.JWT_HTTP_PREFIX, token),
-                   'Content-Type': 'application/json'}
+        headers = {
+            "Authorization": "{}{}".format(dbmi_settings.JWT_HTTP_PREFIX, token),
+            "Content-Type": "application/json",
+        }
 
         # Run it
         response = requests.get(url.url, headers=headers)
         content = response.content
         response.raise_for_status()
 
-        return response.json().get('results', [])
+        return response.json().get("results", [])
 
     except (requests.HTTPError, TypeError, KeyError):
-        logger.error('SciAuthZ permission lookup failed', exc_info=True, extra={
-            'email': email, 'url': url, 'content': content, 'item': item})
+        logger.error(
+            "SciAuthZ permission lookup failed",
+            exc_info=True,
+            extra={"email": email, "url": url, "content": content, "item": item},
+        )
 
     return []
 
@@ -315,8 +329,8 @@ class DBMIAdminPermission(BasePermission):
     def has_permission(self, request, view):
 
         # Get the email of the authenticated user
-        if not hasattr(request, 'user'):
-            logger.warning('No \'user\' attribute on request')
+        if not hasattr(request, "user"):
+            logger.warning("No 'user' attribute on request")
             raise PermissionDenied
 
         # Ensure claims are setup and then check them first, as it is least costly.
@@ -329,7 +343,7 @@ class DBMIAdminPermission(BasePermission):
             return True
 
         # Possibly store these elsewhere for records
-        logger.info('{} Failed MANAGE permission for DBMI'.format(request.user))
+        logger.info("{} Failed MANAGE permission for DBMI".format(request.user))
 
         raise PermissionDenied
 
@@ -342,16 +356,16 @@ class DBMIItemPermission(BasePermission):
     """
 
     # The permission item string to check
-    item = 'dbmi.item.subitem'
+    item = "dbmi.item.subitem"
 
     # The permission itself the requesting user must have for this item
-    permission = 'manage'
+    permission = "manage"
 
     def has_permission(self, request, view):
 
         # Get the email
-        if not hasattr(request, 'user'):
-            logger.warning('No \'user\' (JWT email) attribute on request')
+        if not hasattr(request, "user"):
+            logger.warning("No 'user' (JWT email) attribute on request")
             raise NotAuthenticated
 
         # Check permission server for admin permissions
@@ -369,8 +383,8 @@ class DBMIUserPermission(BasePermission):
     def has_object_permission(self, request, view, obj):
 
         # Get the email
-        if not hasattr(request, 'user'):
-            logger.warning('No \'user\' (JWT email) attribute on request')
+        if not hasattr(request, "user"):
+            logger.warning("No 'user' (JWT email) attribute on request")
             raise NotAuthenticated
 
         return True
@@ -385,8 +399,8 @@ class DBMIOwnerPermission(BasePermission):
     def has_object_permission(self, request, view, obj):
 
         # Get the email
-        if not hasattr(request, 'user'):
-            logger.warning('No \'user\' (JWT email) attribute on request')
+        if not hasattr(request, "user"):
+            logger.warning("No 'user' (JWT email) attribute on request")
             raise NotAuthenticated
 
         # Check if a key has been specified
@@ -405,11 +419,11 @@ class DBMIOwnerPermission(BasePermission):
             logger.debug('No key specified, trying attrs "email", "user" on "{}" for ownership'.format(key, obj))
 
             # Check email attribute
-            if hasattr(obj, 'email') and obj.email == request.user:
+            if hasattr(obj, "email") and obj.email == request.user:
                 return True
 
             # Check for a user attribute
-            if hasattr(obj, 'user') and obj.user == request.user:
+            if hasattr(obj, "user") and obj.user == request.user:
                 return True
 
         raise PermissionDenied
@@ -420,7 +434,8 @@ class DBMIAdminOrOwnerPermission(DBMIOwnerPermission):
     Permission check for owner or MANAGE permissions on DBMI 'obj'. Owner is determined
     by comparing email in JWT with that of the email property on 'obj'
     """
-    message = 'User does not have proper permission on item DBMI'
+
+    message = "User does not have proper permission on item DBMI"
 
     def has_object_permission(self, request, view, obj):
 
@@ -429,7 +444,7 @@ class DBMIAdminOrOwnerPermission(DBMIOwnerPermission):
             return super(DBMIAdminOrOwnerPermission, self).has_object_permission(request, view, obj)
 
         except PermissionDenied:
-            logger.debug('Is not owner of object, checking for admin/manage...')
+            logger.debug("Is not owner of object, checking for admin/manage...")
 
         # Ensure claims are setup and then check them first, as it is least costly.
         if request.auth:
@@ -441,6 +456,6 @@ class DBMIAdminOrOwnerPermission(DBMIOwnerPermission):
             return True
 
         # Possibly store these elsewhere for records
-        logger.info('{} Failed MANAGE or owner permission for DBMI'.format(request.user))
+        logger.info("{} Failed MANAGE or owner permission for DBMI".format(request.user))
 
         raise PermissionDenied

@@ -9,6 +9,7 @@ from dbmi_client import authn
 
 # Get the app logger
 import logging
+
 logger = logging.getLogger(dbmi_settings.LOGGER_NAME)
 
 
@@ -53,7 +54,7 @@ class DBMIAuthenticationMiddleware(MiddlewareMixin):
         # Use the usual routine to get the currently cached user
         user = django_auth.get_user(request)
         if user.is_authenticated:
-            logger.debug('Found existing User session: {}'.format(username))
+            logger.debug("Found existing User session: {}".format(username))
 
             # A cached user is present. We need to double-check JWT user to ensure
             # they are the same as the cached user.
@@ -61,25 +62,25 @@ class DBMIAuthenticationMiddleware(MiddlewareMixin):
             email = authn.get_jwt_email(request, verify=False)
             if username and email:
                 if not user.username.lower() == username.lower() or not user.email.lower() == email.lower():
-                    logger.debug('User session does not match JWT, logging out')
+                    logger.debug("User session does not match JWT, logging out")
 
                     # TODO: Figure out if its necessary to person any session invalidation here
                     return AnonymousUser()
 
         else:
-            logger.debug('No existing User, attempting to login: {}'.format(username))
+            logger.debug("No existing User, attempting to login: {}".format(username))
 
             # No user is logged in but we have a JWT token. Attempt to authenticate
             # the current JWT and if it succeeds, login and cache the user.
             user = django_auth.authenticate(request, token=token)
             if user and user.is_authenticated:
-                logger.debug('User has authenticated: {}'.format(username))
+                logger.debug("User has authenticated: {}".format(username))
 
                 # Store this user in session
                 django_auth.login(request, user)
 
             else:
-                logger.debug('User could not be authenticated: {}'.format(username))
+                logger.debug("User could not be authenticated: {}".format(username))
                 # Whatever token this user has, it's not valid OR their account would/could not
                 # be created, deny permission. This will likely be the case for instances where
                 # automatic user creation is disabled and a user with a valid JWT is not being
@@ -145,7 +146,7 @@ class DBMIUsersAuthenticationMiddleware(DBMIAuthenticationMiddleware):
                 # Run their sync again to make absolutely sure they're still an admin
                 user = django_auth.authenticate(request, token=token)
                 if user and user.is_authenticated:
-                    logger.debug('User has re-authenticated: {}'.format(username))
+                    logger.debug("User has re-authenticated: {}".format(username))
 
                     # Store this user in session
                     django_auth.login(request, user)
@@ -155,7 +156,7 @@ class DBMIUsersAuthenticationMiddleware(DBMIAuthenticationMiddleware):
                         logger.debug(f'User "{username}":"{email}" is still admin')
 
                 else:
-                    logger.debug('User could not be authenticated: {}'.format(username))
+                    logger.debug("User could not be authenticated: {}".format(username))
                     # Whatever token this user has, it's not valid OR their account would/could not
                     # be created, deny permission. This will likely be the case for instances where
                     # automatic user creation is disabled and a user with a valid JWT is not being
@@ -195,7 +196,7 @@ class DBMIJWTAuthenticationMiddleware(MiddlewareMixin):
         # Attempt to authenticate the current JWT.
         user = django_auth.authenticate(request, token=token)
         if not user or not user.is_authenticated:
-            logger.debug('User could not be authenticated: {}'.format(username))
+            logger.debug("User could not be authenticated: {}".format(username))
             # Whatever token this user has, it's not valid OR their account would/could not
             # be created, deny permission. This will likely be the case for instances where
             # automatic user creation is disabled and a user with a valid JWT is not being

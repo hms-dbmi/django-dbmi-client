@@ -4,22 +4,22 @@ from enum import Enum
 
 import requests
 from furl import furl
-from django.conf import settings
 
 from dbmi_client.settings import dbmi_settings
 from dbmi_client import authn
 
 import logging
+
 logger = logging.getLogger(dbmi_settings.LOGGER_NAME)
 
 
 # Set the possible permissions
 class FileserviceRole(Enum):
-    Readers = '{}__READERS'.format(dbmi_settings.FILESERVICE_GROUP)
-    Writers = '{}__WRITERS'.format(dbmi_settings.FILESERVICE_GROUP)
-    Downloaders = '{}__DOWNLOADERS'.format(dbmi_settings.FILESERVICE_GROUP)
-    Uploaders = '{}__UPLOADERS'.format(dbmi_settings.FILESERVICE_GROUP)
-    admins = '{}__ADMINS'.format(dbmi_settings.FILESERVICE_GROUP)
+    Readers = "{}__READERS".format(dbmi_settings.FILESERVICE_GROUP)
+    Writers = "{}__WRITERS".format(dbmi_settings.FILESERVICE_GROUP)
+    Downloaders = "{}__DOWNLOADERS".format(dbmi_settings.FILESERVICE_GROUP)
+    Uploaders = "{}__UPLOADERS".format(dbmi_settings.FILESERVICE_GROUP)
+    admins = "{}__ADMINS".format(dbmi_settings.FILESERVICE_GROUP)
 
     @classmethod
     def roles(cls):
@@ -33,39 +33,37 @@ def create_group():
     """
     # Group was not found, create it, specifying passed admins
     data = {
-        'name': dbmi_settings.FILESERVICE_GROUP.upper(),
-        'users': [{'email': email} for email in dbmi_settings.FILESERVICE_ADMINS],
-        'buckets': [{'name': b} for b in dbmi_settings.FILESERVICE_BUCKETS],
+        "name": dbmi_settings.FILESERVICE_GROUP.upper(),
+        "users": [{"email": email} for email in dbmi_settings.FILESERVICE_ADMINS],
+        "buckets": [{"name": b} for b in dbmi_settings.FILESERVICE_BUCKETS],
     }
 
     # Make the URL.
     url = furl(dbmi_settings.FILESERVICE_URL)
-    url.path.segments = ['filemaster', 'groups', '']
+    url.path.segments = ["filemaster", "groups", ""]
 
     # Make the request
-    groups = _request(method='post', url=url.url, data=json.dumps(data))
+    groups = _request(method="post", url=url.url, data=json.dumps(data))
     if not groups:
-        logger.info('Failed to create groups')
+        logger.info("Failed to create groups")
         return False
 
     # Make the request.
-    data = {'buckets': [{'name': b} for b in dbmi_settings.FILESERVICE_BUCKETS]}
+    data = {"buckets": [{"name": b} for b in dbmi_settings.FILESERVICE_BUCKETS]}
     for group in groups:
 
         # Make the URL
         url = furl(dbmi_settings.FILESERVICE_URL)
-        url.path.segments = ['filemaster', 'groups', group['id'], '']
+        url.path.segments = ["filemaster", "groups", group["id"], ""]
 
         # Make the request
-        response = _request(method='put', url=url.url, data=json.dumps(data))
+        response = _request(method="put", url=url.url, data=json.dumps(data))
         if response:
-            logger.info('Added buckets "{}" to group "{}"'.format(
-                dbmi_settings.FILESERVICE_BUCKETS, group['name']
-            ))
+            logger.info('Added buckets "{}" to group "{}"'.format(dbmi_settings.FILESERVICE_BUCKETS, group["name"]))
         else:
-            logger.info('Failed to add buckets "{}" to group "{}"'.format(
-                dbmi_settings.FILESERVICE_BUCKETS, group['name']
-            ))
+            logger.info(
+                'Failed to add buckets "{}" to group "{}"'.format(dbmi_settings.FILESERVICE_BUCKETS, group["name"])
+            )
 
     return True
 
@@ -78,17 +76,17 @@ def check_group():
     """
     # Make the URL.
     url = furl(dbmi_settings.FILESERVICE_URL)
-    url.path.segments = ['filemaster', 'groups', '']
+    url.path.segments = ["filemaster", "groups", ""]
 
     # Make the request
-    groups = _request(method='get', url=url.url)
+    groups = _request(method="get", url=url.url)
     if groups is None:
-        logger.info('Getting groups failed')
+        logger.info("Getting groups failed")
         return False
 
     # Check for the required group.
     for group in groups:
-        if group['name'] in FileserviceRole.roles():
+        if group["name"] in FileserviceRole.roles():
             return True
 
     return False
@@ -104,24 +102,24 @@ def create_archivefile(filename, metadata=None, tags=None):
     """
     # Build the request.
     data = {
-        'permissions': [
+        "permissions": [
             dbmi_settings.FILESERVICE_GROUP,
         ],
-        'filename': filename,
+        "filename": filename,
     }
 
     # Check for and add optional data
     if metadata:
-        data['metadata'] = metadata
+        data["metadata"] = metadata
     if tags:
-        data['tags'] = tags
+        data["tags"] = tags
 
     # Make the URL.
     url = furl(dbmi_settings.FILESERVICE_URL)
-    url.path.segments = ['filemaster', 'api', 'file', '']
+    url.path.segments = ["filemaster", "api", "file", ""]
 
     # Make the request
-    file = _request(method='post', url=url.url, data=json.dumps(data))
+    file = _request(method="post", url=url.url, data=json.dumps(data))
 
     return file
 
@@ -142,32 +140,28 @@ def create_archivefile_upload(filename, metadata=None, tags=None, bucket=None, c
         if dbmi_settings.FILESERVICE_BUCKETS:
             bucket = dbmi_settings.FILESERVICE_BUCKETS[0]
         else:
-            raise ValueError('Cannot upload file without bucket specified')
+            raise ValueError("Cannot upload file without bucket specified")
 
     # Make the request.
     file = create_archivefile(filename=filename, metadata=metadata, tags=tags)
 
     # Get the UUID.
-    uuid = file['uuid']
+    uuid = file["uuid"]
 
     # Form the request for the file link
-    params = {
-        'cloud': 'aws',
-        'bucket': bucket,
-        'expires': 100
-    }
+    params = {"cloud": "aws", "bucket": bucket, "expires": 100}
 
     # Add conditions if passed
     if conditions:
-        params['conditions'] = base64.b64encode(json.dumps(conditions).encode()).decode()
+        params["conditions"] = base64.b64encode(json.dumps(conditions).encode()).decode()
 
     # Make the URL.
     url = furl(dbmi_settings.FILESERVICE_URL)
-    url.path.segments = ['filemaster', 'api', 'file', uuid, 'post', '']
+    url.path.segments = ["filemaster", "api", "file", uuid, "post", ""]
     url.query.params = params
 
     # Make the request
-    data = _request(method='get', url=url.url)
+    data = _request(method="get", url=url.url)
 
     return uuid, data
 
@@ -183,23 +177,19 @@ def get_archivefiles(uuids=None):
     """
     # Build the request.
     if uuids and type(uuids) is str:
-        params = {
-            'uuids': uuids
-        }
+        params = {"uuids": uuids}
     elif uuids and type(uuids) is list:
-        params = {
-            'uuids': ','.join(uuids)
-        }
+        params = {"uuids": ",".join(uuids)}
     else:
         params = {}
 
     # Make the URL.
     url = furl(dbmi_settings.FILESERVICE_URL)
-    url.path.segments = ['filemaster', 'api', 'file', '']
+    url.path.segments = ["filemaster", "api", "file", ""]
     url.query.params = params
 
     # Make the request
-    files = _request(method='get', url=url.url)
+    files = _request(method="get", url=url.url)
     if files:
         return files
     else:
@@ -230,7 +220,7 @@ def get_archivefile_url(uuid):
     """
     # Make the URL.
     url = furl(dbmi_settings.FILESERVICE_URL)
-    url.path.segments = ['filemaster', 'api', 'file', uuid, 'download', '']
+    url.path.segments = ["filemaster", "api", "file", uuid, "download", ""]
     return url.url
 
 
@@ -245,10 +235,10 @@ def get_archivefile_hash(uuid):
     """
     # Make the URL.
     url = furl(dbmi_settings.FILESERVICE_URL)
-    url.path.segments = ['filemaster', 'api', 'file', uuid, 'filehash', '']
+    url.path.segments = ["filemaster", "api", "file", uuid, "filehash", ""]
 
     # Make the request
-    hash = _request(method='get', url=url.url)
+    hash = _request(method="get", url=url.url)
     return hash
 
 
@@ -264,10 +254,10 @@ def update_archivefile(uuid, file):
     """
     # Make the URL.
     url = furl(dbmi_settings.FILESERVICE_URL)
-    url.path.segments = ['filemaster', 'api', 'file', uuid, '']
+    url.path.segments = ["filemaster", "api", "file", uuid, ""]
 
     # Make the request
-    file = _request(method='patch', url=url.url, data=json.dumps(file))
+    file = _request(method="patch", url=url.url, data=json.dumps(file))
     return file
 
 
@@ -280,11 +270,11 @@ def copy_archivefile(uuid, bucket):
     """
     # Make the URL.
     url = furl(dbmi_settings.FILESERVICE_URL)
-    url.path.segments = ['filemaster', 'api', 'file', uuid, 'copy', '']
-    url.query.params.add('to', bucket)
+    url.path.segments = ["filemaster", "api", "file", uuid, "copy", ""]
+    url.query.params.add("to", bucket)
 
     # Make the request
-    file = _request(method='post', url=url.url)
+    file = _request(method="post", url=url.url)
     return file
 
 
@@ -297,11 +287,11 @@ def move_archivefile(uuid, bucket):
     """
     # Make the URL.
     url = furl(dbmi_settings.FILESERVICE_URL)
-    url.path.segments = ['filemaster', 'api', 'file', uuid, 'move', '']
-    url.query.params.add('to', bucket)
+    url.path.segments = ["filemaster", "api", "file", uuid, "move", ""]
+    url.query.params.add("to", bucket)
 
     # Make the request
-    file = _request(method='post', url=url.url)
+    file = _request(method="post", url=url.url)
     return file
 
 
@@ -314,11 +304,11 @@ def delete_archivefile(uuid, location):
     """
     # Make the URL.
     url = furl(dbmi_settings.FILESERVICE_URL)
-    url.path.segments = ['filemaster', 'api', 'file', uuid, '']
-    url.query.params.add('location', location)
+    url.path.segments = ["filemaster", "api", "file", uuid, ""]
+    url.query.params.add("location", location)
 
     # Make the request
-    file = _request(method='delete', url=url.url)
+    file = _request(method="delete", url=url.url)
     return file
 
 
@@ -336,11 +326,11 @@ def uploaded_archivefile(uuid, location_id):
     """
     # Make the URL.
     url = furl(dbmi_settings.FILESERVICE_URL)
-    url.path.segments = ['filemaster', 'api', 'file', uuid, 'uploadcomplete', '']
-    url.query.params.add('location', location_id)
+    url.path.segments = ["filemaster", "api", "file", uuid, "uploadcomplete", ""]
+    url.query.params.add("location", location_id)
 
     # Make the request
-    file = _request(method='get', url=url.url)
+    file = _request(method="get", url=url.url)
     return file
 
 
@@ -357,11 +347,11 @@ def get_archivefile_download_url(uuid):
     """
     # Make the URL.
     url = furl(dbmi_settings.FILESERVICE_URL)
-    url.path.segments = ['filemaster', 'api', 'file', uuid, 'download', '']
+    url.path.segments = ["filemaster", "api", "file", uuid, "download", ""]
 
     # Make the request
-    file = _request(method='get', url=url.url)
-    return file['url']
+    file = _request(method="get", url=url.url)
+    return file["url"]
 
 
 def download_archivefile(uuid):
@@ -396,7 +386,7 @@ def get_archivefile_proxy_url(uuid):
     """
     # Make the URL.
     url = furl(dbmi_settings.FILESERVICE_URL)
-    url.path.segments = ['filemaster', 'api', 'file', uuid, 'proxy', '']
+    url.path.segments = ["filemaster", "api", "file", uuid, "proxy", ""]
     return url.url
 
 
@@ -412,10 +402,10 @@ def proxy_archivefile(uuid):
     """
     # Make the URL.
     url = furl(dbmi_settings.FILESERVICE_URL)
-    url.path.segments = ['filemaster', 'api', 'file', uuid, 'proxy', '']
+    url.path.segments = ["filemaster", "api", "file", uuid, "proxy", ""]
 
     # Make the request
-    response = _request(method='get', url=url.url, raw=True)
+    response = _request(method="get", url=url.url, raw=True)
 
     # Return the data
     return response.content
@@ -433,11 +423,11 @@ def download_archivefiles(uuids):
     """
     # Make the URL.
     url = furl(dbmi_settings.FILESERVICE_URL)
-    url.path.segments = ['filemaster', 'api', 'file', 'archive', '']
-    url.query.params.add('uuids', ','.join(uuids))
+    url.path.segments = ["filemaster", "api", "file", "archive", ""]
+    url.query.params.add("uuids", ",".join(uuids))
 
     # Make the request
-    response = _request(method='get', url=url.url, raw=True)
+    response = _request(method="get", url=url.url, raw=True)
 
     # Return the data
     return response.content
@@ -466,10 +456,12 @@ def _request(method, url, request=None, raw=False, **kwargs):
             return response.json()
 
     except Exception as e:
-        logger.debug('Request/{} failed -> {}: {}'.format(method, url, getattr(response, 'content', '<empty>')))
-        logger.exception('Request error: {}'.format(e), exc_info=True, extra={
-            'response': response, 'method': method, 'url': url, **kwargs
-        })
+        logger.debug("Request/{} failed -> {}: {}".format(method, url, getattr(response, "content", "<empty>")))
+        logger.exception(
+            "Request error: {}".format(e),
+            exc_info=True,
+            extra={"response": response, "method": method, "url": url, **kwargs},
+        )
 
     # Determine what to return
     if raw:
@@ -488,7 +480,7 @@ def _headers(request=None):
     if dbmi_settings.FILESERVICE_TOKEN:
 
         # Use the service token from environment
-        return {"Authorization": 'Token {}'.format(dbmi_settings.FILESERVICE_TOKEN), 'Content-Type': 'application/json'}
+        return {"Authorization": "Token {}".format(dbmi_settings.FILESERVICE_TOKEN), "Content-Type": "application/json"}
 
     elif request:
 
@@ -496,10 +488,10 @@ def _headers(request=None):
         token = authn.get_jwt(request)
 
         # Use the service token from environment
-        return {"Authorization": 'JWT {}'.format(token), 'Content-Type': 'application/json'}
+        return {"Authorization": "JWT {}".format(token), "Content-Type": "application/json"}
 
     else:
-        raise ValueError('Cannot properly authenticate service call')
+        raise ValueError("Cannot properly authenticate service call")
 
 
 # Indicates the requesting user does not have sufficient permissions for the operation

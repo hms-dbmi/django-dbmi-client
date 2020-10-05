@@ -1,0 +1,60 @@
+name: Prerelease Deploy
+
+on:
+  push:
+    branches: [ development, beta, alpha ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Python 3.6
+      uses: actions/setup-python@v1
+      with:
+        python-version: 3.6
+    - name: Install Python packages
+      run: |
+        python -m pip install --upgrade pip
+        python setup.py -q install
+        pip install -r requirements-test.txt
+    - name: Lint
+      run: |
+        pip install flake8
+        # stop the build if there are Python syntax errors or undefined names
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+    - name: Test
+      run: |
+        python setup.py test
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Python 3.6
+      uses: actions/setup-python@v1
+      with:
+        python-version: 3.6
+    - name: Install Python packages
+      run: |
+        python -m pip install --upgrade pip wheel twine
+    - uses: cycjimmy/semantic-release-action@v2
+      id: semantic
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GIT_AUTHOR_NAME: Bryan Larson
+        GIT_AUTHOR_EMAIL: bryan_larson@hms.harvard.edu
+      with:
+        extra_plugins: |
+          @semantic-release/exec
+          @semantic-release/git
+    - name: Publish to PyPi
+      if: steps.semantic.outputs.new_release_published == 'true'
+      env:
+        PYPI_USERNAME: ${{ secrets.PYPI_USERNAME }}
+        PYPI_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+      run: |
+        twine upload --non-interactive -u "${PYPI_USERNAME}" -p "${PYPI_PASSWORD}" dist/*
