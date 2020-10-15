@@ -1,5 +1,8 @@
 include README.rst
 include LICENSE.md
+include requirements.txt
+include requirements-test.txt
+include requirements-dev.txt
 recursive-include dbmi_client/static *.js *.css *.png *.ico *.eot *.svg *.ttf *.woff *.woff2
 recursive-include dbmi_client/templates *.html
 global-exclude __pycache__

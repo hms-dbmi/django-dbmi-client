@@ -33,7 +33,6 @@ def jwt_has_authz(claims, auth_type, item):
     """
     # Check if enabled
     if not dbmi_settings.JWT_AUTHZ_NAMESPACE:
-        logger.debug("JWT_AUTHZ_NAMESPACE is not defined, JWT AuthZ checks are disabled")
         return None
 
     try:
