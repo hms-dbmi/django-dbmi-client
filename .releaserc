@@ -9,7 +9,7 @@
         "@semantic-release/commit-analyzer",
         "@semantic-release/release-notes-generator",
         ["@semantic-release/exec", {
-          "prepareCmd": "sed -ie \"s/^__version__.*/__version__ = '${nextRelease.version}'/g\" dbmi_client/__init__.py && python setup.py sdist bdist_wheel"
+          "prepareCmd": "sed -ie \"s/^__version__.*/__version__ = \\x22${nextRelease.version}\\x22/g\" dbmi_client/__init__.py && python setup.py sdist bdist_wheel"
         }],
         ["@semantic-release/git", {
             "assets": ["dbmi_client/__init__.py"],
