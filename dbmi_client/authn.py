@@ -893,6 +893,30 @@ class DBMIModelAuthenticationBackend(DBMIAuthenticationBackend):
 
         return user
 
+    def _set_superuser(self, request, user):
+        """
+        This method allows backends to determine whether or not an admin user
+        should be granted Django superuser status.
+
+        :param request: The current request
+        :type request: HttpRequest
+        :param user: The current user
+        :type user: User
+        """
+        return False
+
+    def _set_staff(self, request, user):
+        """
+        This method allows backends to determine whether or not an admin user
+        should be granted Django superuser status.
+
+        :param request: The current request
+        :type request: HttpRequest
+        :param user: The current user
+        :type user: User
+        """
+        return False
+
     def _sync_user(self, request, user):
         """
         Called after a user is fetched/created and syncs any additional properties
@@ -925,6 +949,13 @@ class DBMIModelAuthenticationBackend(DBMIAuthenticationBackend):
                     },
                 )
                 raise PermissionDenied
+
+            # Check if superuser/staff
+            if self._set_staff(request, user):
+                user.is_staff = True
+
+            if self._set_superuser(request, user):
+                user.is_superuser = True
 
             # Save
             user.save()
@@ -982,15 +1013,37 @@ class DBMIUsersModelAuthenticationBackend(DBMIModelAuthenticationBackend):
             )
 
 
-class DBMIAdminModelAuthenticationBackend(DBMIModelAuthenticationBackend):
+class DBMIRestrictedModelAuthenticationBackend(DBMIModelAuthenticationBackend):
 
     """
     Clients must have a valid JWT in the request (either in HTTP Authorization headers or in cookies) as
-    well as admin authorization, either through JWT claims or as a permission in the DBMI AuthZ service.
-    Use this authentication backend for sites that are only accessible to admins and no other users.
-    User model is keyed by the username and email contained in the JWT. Profile and groups are synced
-    from the JWT upon each login.
+    well as authorization, either through JWT claims or as a permission in the DBMI AuthZ service.
+    A method performs an inspection of any proposed users' authorizations and permissions and determines
+    if they should be created within the model or not. The default implementation requires proposed
+    users to have any existing permissions on the current application.
+
+    Use this authentication backend for sites that are only accessible to users with specific
+    permissions/roles/groups. User model is keyed by the username and email contained in the JWT.
+    Profile and groups are synced from the JWT upon each login.
     """
+
+    def _should_create_user(self, request, email):
+        """
+        This method inspects the proposed user and returns whether they should be created or not.
+        Typically, before a user is rejected due to a missing permission, their record will have
+        already been created in the Django model. This method allows subclassing backends to do
+        a check of the proposed user before the creation step, thus avoiding User entries that
+        would never be able to log in anyways. The default implementation checks for any existing
+        permissions on the current application.
+
+        :param request: The current request
+        :type request: HttpRequest
+        :param email: The email of the requesting user
+        :type email: str
+        :return: Whether the user should be created or not
+        :rtype: bool
+    """
+        return len(authz.get_permissions(request, email, item=dbmi_settings.CLIENT, children=True)) > 1
 
     def _create_user(self, request):
         """
@@ -1002,8 +1055,9 @@ class DBMIAdminModelAuthenticationBackend(DBMIModelAuthenticationBackend):
         username = get_jwt_username(request, verify=False)
         email = get_jwt_email(request, verify=False)
 
-        # Before we create a user, we must ensure they have admin authorizations
-        if not authz.is_admin(request, email):
+        # Before we create a user, we must ensure they have authorizations
+        if not self._should_create_user(request, email):
+            logger.debug('User {}/{} did not pass restriction test, access denied'.format(username, email))
             raise PermissionDenied
 
         # Create them
@@ -1025,7 +1079,41 @@ class DBMIAdminModelAuthenticationBackend(DBMIModelAuthenticationBackend):
         requests to the authz server.
         """
         # Do normal sync first
-        super(DBMIAdminModelAuthenticationBackend, self)._sync_user(request, user)
+        super(DBMIRestrictedModelAuthenticationBackend, self)._sync_user(request, user)
+
+
+class DBMIAdminModelAuthenticationBackend(DBMIModelAuthenticationBackend):
+
+    """
+    Clients must have a valid JWT in the request (either in HTTP Authorization headers or in cookies) as
+    well as authorization, either through JWT claims or as a permission in the DBMI AuthZ service.
+    A method performs an inspection of any proposed users' authorizations and permissions and determines
+    if they should be created within the model or not. The default implementation requires proposed
+    users to have an 'admin' permission set on the current app, but can be overidden to check for
+    other authorizations.
+
+    Use this authentication backend for sites that are only accessible to users with specific
+    permissions/roles/groups. User model is keyed by the username and email contained in the JWT.
+    Profile and groups are synced from the JWT upon each login.
+    """
+
+    def _should_create_user(self, request, email):
+        """
+        This method inspects the proposed user and returns whether they should be created or not.
+        Typically, before a user is rejected due to a missing permission, their record will have
+        already been created in the Django model. This method allows subclassing backends to do
+        a check of the proposed user before the creation step, thus avoiding User entries that
+        would never be able to log in anyways. The default implementation checks for a single
+        'admin' permission on the current application.
+
+        :param request: The current request
+        :type request: HttpRequest
+        :param email: The email of the requesting user
+        :type email: str
+        :return: Whether the user should be created or not
+        :rtype: bool
+        """
+        return authz.is_admin(request, email)
 
 
 class DBMISuperuserModelAuthenticationBackend(DBMIAdminModelAuthenticationBackend):

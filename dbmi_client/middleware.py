@@ -130,7 +130,7 @@ class DBMIUsersAuthenticationMiddleware(DBMIAuthenticationMiddleware):
     def get_jwt_user(request):
 
         # Use super's implementation
-        user = super(DBMIUsersAuthenticationMiddleware).get_jwt_user(request)
+        user = DBMIAuthenticationMiddleware.get_jwt_user(request)
         if user:
 
             # Check if they've been granted admin level privileges

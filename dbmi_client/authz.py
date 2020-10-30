@@ -1,6 +1,7 @@
 from furl import furl
 import requests
 
+from django.utils.module_loading import import_string
 from rest_framework.permissions import BasePermission
 from rest_framework.exceptions import PermissionDenied, NotAuthenticated
 
@@ -16,6 +17,87 @@ logger = logging.getLogger(dbmi_settings.LOGGER_NAME)
 JWT_AUTHZ_GROUPS = "groups"
 JWT_AUTHZ_ROLES = "roles"
 JWT_AUTHZ_PERMISSIONS = "permissions"
+
+
+class AuthorizationReporter(object):
+    """
+    This class manages handlers for tracking authorization failures. Clients
+    are able to follow this as an example of what to define to allow
+    DBMI-Client to send authorization failures to their own custom reporting
+    functionality.
+    """
+
+    @classmethod
+    def failure(cls, request, user, item, permissions):
+        """
+        Triggered after an authorization failure. Includes details on
+        the request, the user making the request, as well as the item
+        and the permissions that failed or were invalid.
+
+        :param request: The request that failed authorizations
+        :type request: HttpRequest
+        :param user: The user making the request
+        :type user: User
+        :param item: The item string for which the permissions apply
+        :type item: str
+        :param permissions: The permissions that were needed for the action
+        :type permissions: list
+        """
+        logger.info(f"{dbmi_settings.CLIENT}: User '{user}' "
+                    f"failed authorization on '{item}': '{permissions}''")
+
+    @classmethod
+    def success(cls, request, user, item, permissions):
+        """
+        Triggered after an authorization success. Includes details on
+        the request, the user making the request, as well as the item
+        and the permissions that succeeded and or were valid.
+
+        :param request: The request that failed authorizations
+        :type request: HttpRequest
+        :param user: The user making the request
+        :type user: User
+        :param item: The item string for which the permissions apply
+        :type item: str
+        :param permissions: The permissions that were needed for the action
+        :type permissions: list
+        """
+        logger.info(f"{dbmi_settings.CLIENT}: User '{user}' "
+                    f"passed authorization on '{item}': '{permissions}''")
+
+    @classmethod
+    def _report(cls, request, user, item, permissions, failure=True):
+        """
+        This method is called everytime an authorization event occurs.
+        This allows for manual reporting/tracking of auth failures/successes
+        for auditing/blocking/etc.
+
+        :param request: The current request
+        :type request: HttpRequest
+        :param user: An identifier of the requesting user
+        :type email: str
+        :param item: The item attempted to be access
+        :type item: str
+        :param permissions: The permissions needed that were failed
+        :type permissions: list
+        """
+        # Run method if set
+        if dbmi_settings.AUTHZ_REPORTER_CLASS:
+
+            try:
+                # Load it
+                ReporterClass = import_string(dbmi_settings.AUTHZ_REPORTER_CLASS)
+
+                # Call the report method
+                getattr(ReporterClass, "failure" if failure else "success")(request, user, item, permissions)
+
+            except Exception as e:
+                logger.exception('Error: Could not call report method: {}'.format(e), exc_info=True, extra={
+                    'request': request, 'user': user, 'item': item, 'permissions': permissions, 'failure': failure,
+                })
+        else:
+            logger.info(f"{dbmi_settings.CLIENT}: User '{user}' "
+                        f"{'failed' if failure else 'passed'} authorization on '{item}': '{permissions}''")
 
 
 def jwt_has_authz(claims, auth_type, item):
@@ -256,15 +338,21 @@ def is_admin(request, email):
     return False
 
 
-def get_permissions(request, email, item=None):
+def get_permissions(request, email, item=None, children=False):
     """
     Consults the DBMIAuthz server for authorization checks. Uses the JWT to
     authenticate the call and checks the returned permissions for the one
     specified.
     :param request: The current request or JWT to authenticate the call
+    :type HttpRequest: str
     :param email: The email in the JWT
+    :type email: str
     :param item: The item string to check for the permission
-    :return: bool
+    :type item: str
+    :param children: Whether children of the passed item should be returned
+    :type children: bool
+    :return: A list of permissions
+    :rtype: list
     """
     url = None
     content = None
@@ -275,6 +363,10 @@ def get_permissions(request, email, item=None):
         url.path.segments.append("")
         url.query.params.add("email", email)
         url.query.params.add("client", dbmi_settings.CLIENT)
+
+        # Include children
+        if children:
+            url.query.params.add("children", "true")
 
         # Check for specific item
         if item:
@@ -342,7 +434,13 @@ class DBMIAdminPermission(BasePermission):
             return True
 
         # Possibly store these elsewhere for records
-        logger.info("{} Failed MANAGE permission for DBMI".format(request.user))
+        AuthorizationReporter._report(
+            request=request,
+            user=request.user,
+            item=dbmi_settings.CLIENT,
+            permissions=[dbmi_settings.AUTHZ_ADMIN_PERMISSION],
+            failure=True
+        )
 
         raise PermissionDenied
 
@@ -370,6 +468,15 @@ class DBMIItemPermission(BasePermission):
         # Check permission server for admin permissions
         if has_permission(request, request.user, self.item, self.permission):
             return True
+
+        # Possibly store these elsewhere for records
+        AuthorizationReporter._report(
+            request=request,
+            user=request.user,
+            item=self.item,
+            permissions=[self.permission],
+            failure=True
+        )
 
         raise PermissionDenied
 

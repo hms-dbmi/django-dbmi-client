@@ -54,6 +54,7 @@ CONFIG_DEFAULTS = {
     "AUTHZ_ADMIN_GROUP": "dbmi-admin",
     "AUTHZ_ADMIN_PERMISSION": "MANAGE",
     "AUTHZ_USER_GROUP": "dbmi-user",
+    "AUTHZ_REPORTER_CLASS": "dbmi_client.authz.AuthorizationReporter",
     # JWT bits
     "JWT_AUTHZ_NAMESPACE": None,
     "JWT_HTTP_PREFIX": "JWT ",
