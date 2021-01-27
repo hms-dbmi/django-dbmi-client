@@ -49,7 +49,7 @@ CONFIG_DEFAULTS = {
     "LOG_LEVEL": logging.WARNING,
     # Universal login screen branding
     "AUTHN_TITLE": "DBMI Client",
-    "AUTHN_ICON_URL": "https://authentication.dbmi.hms.harvard.edu/static/hms_shield.png",
+    "AUTHN_ICON_URL": "https://authentication.dbmi.hms.harvard.edu/static/hms_logo.svg",
     "AUTHN_COLOR": "#bc262b",
     "AUTHN_BACKGROUND": None,
     # AuthZ groups/roles/permissions
