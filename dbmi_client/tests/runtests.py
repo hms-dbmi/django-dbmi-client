@@ -28,6 +28,7 @@ INSTALLED_APPS = EXTERNAL_APPS + INTERNAL_APPS
 
 if not settings.configured:
     settings.configure(
+        SECRET_KEY="*4n1!z0%@w-e&u9c-kpyqof=-nxvx^v2m000#gf9vewm3s+_v)",
         DATABASES={
             "default": {
                 "ENGINE": "django.db.backends.sqlite3",
