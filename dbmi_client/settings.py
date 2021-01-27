@@ -50,6 +50,8 @@ CONFIG_DEFAULTS = {
     # Universal login screen branding
     "AUTHN_TITLE": "DBMI Client",
     "AUTHN_ICON_URL": "https://authentication.dbmi.hms.harvard.edu/static/hms_shield.png",
+    "AUTHN_COLOR": "#bc262b",
+    "AUTHN_BACKGROUND": None,
     # AuthZ groups/roles/permissions
     "AUTHZ_ADMIN_GROUP": "dbmi-admin",
     "AUTHZ_ADMIN_PERMISSION": "MANAGE",
@@ -65,6 +67,7 @@ CONFIG_DEFAULTS = {
     "AUTH0_SECRET": None,  # Only needed if login module is enabled
     "AUTH0_TENANT": None,
     "AUTH0_SCOPE": "openid email",
+    "AUTH0_DOMAIN": None, # Only if needed if using an Auth0 custom domain
     # Auth0 clients
     "AUTH0_CLIENTS": None,  # Use this dictionary to specify multiple auth0 tenant: {client ID, secret} configs
     # Auth0 tenants

@@ -2,7 +2,10 @@ import requests
 import json
 import base64
 import furl
+import secrets
+from urllib.parse import urlencode
 
+from django.core.exceptions import PermissionDenied, SuspiciousOperation
 from django.shortcuts import render, redirect, reverse
 from django.http import HttpResponse, QueryDict
 from dbmi_client.settings import dbmi_settings
@@ -11,8 +14,16 @@ from django.contrib import auth as django_auth
 
 # Get the logger
 import logging
-
 logger = logging.getLogger(dbmi_settings.LOGGER_NAME)
+
+# Set a name for staching state during authentication
+DBMI_AUTH_STATE_COOKIE_NAME = "DBMI_AUTH_STATE"
+DBMI_AUTH_QUERY_COOKIE_NAME = "DBMI_AUTH_QUERY"
+DBMI_AUTH_QUERY_CLIENT_ID_KEY = "client_id"
+DBMI_AUTH_QUERY_NEXT_KEY = dbmi_settings.LOGIN_REDIRECT_KEY
+DBMI_AUTH_QUERY_BRANDING_KEY = "branding"
+DBMI_AUTH_CALLBACK_QUERY_KEY = "query"
+DBMI_AUTH_STATE_KEY = "state"
 
 
 def token(request):
@@ -58,26 +69,86 @@ def login(request):
     # Build a URL with the root URI
     callback_url = furl.furl(request.build_absolute_uri(reverse("dbmi_login:callback")))
 
-    # Pass along any parameters as base64 encoded
-    query = base64.urlsafe_b64encode(request.META.get("QUERY_STRING").encode("utf-8")).decode("utf-8")
-    callback_url.query.params.add("query", query)
+    # Build an encoded querystring to pass along to Auth0
+    query = {}
+    logger.debug(f"DBMISVC/AuthN: Passed parameters: {','.join(list(request.GET.keys()))}")
 
-    # Initialize the context.
-    context = {
-        "callback_url": callback_url.url,
-        "auth0_client_id": dbmi_settings.AUTH0_CLIENT_ID,
-        "auth0_domain": "{}.auth0.com".format(dbmi_settings.AUTH0_TENANT),
-        "scope": dbmi_settings.AUTH0_SCOPE,
-        "title": dbmi_settings.AUTHN_TITLE,
-        "icon_url": dbmi_settings.AUTHN_ICON_URL,
-    }
+    # Check for authentication query elements
+    if request.GET.get(DBMI_AUTH_QUERY_BRANDING_KEY):
 
-    # Check for messages to display on lock widget
-    if request.GET.get("lock_message"):
-        context["lock_message"] = request.GET.get("lock_message")
-        context["lock_message_type"] = request.GET.get("lock_message_type", "error")
+        # Add it
+        query[DBMI_AUTH_QUERY_BRANDING_KEY] = request.GET[DBMI_AUTH_QUERY_BRANDING_KEY]
 
-    return render(request, template_name="dbmi_client/login/login.html", context=context)
+    else:
+
+        # Add default UI customizations for Auth0 universal login
+        branding = {}
+        if dbmi_settings.AUTHN_TITLE:
+            branding["title"] = dbmi_settings.AUTHN_TITLE
+        if dbmi_settings.AUTHN_ICON_URL:
+            branding["icon_url"] = dbmi_settings.AUTHN_ICON_URL
+        if dbmi_settings.AUTHN_COLOR:
+            branding["color"] = dbmi_settings.AUTHN_COLOR
+        if dbmi_settings.AUTHN_BACKGROUND:
+            branding["background"] = dbmi_settings.AUTHN_BACKGROUND
+
+        # Add it
+        query[DBMI_AUTH_QUERY_BRANDING_KEY] = base64.urlsafe_b64encode(json.dumps(branding).encode('utf-8')).decode('utf-8')
+
+    # Add redirect URL
+    if request.GET.get(DBMI_AUTH_QUERY_NEXT_KEY):
+
+        # Add it
+        query[DBMI_AUTH_QUERY_NEXT_KEY] = request.GET[DBMI_AUTH_QUERY_NEXT_KEY]
+
+    # Add Auth0 client ID
+    query[DBMI_AUTH_QUERY_CLIENT_ID_KEY] = dbmi_settings.AUTH0_CLIENT_ID
+
+    # Revert the query back to query string and encode in base64
+    query = base64.urlsafe_b64encode(urlencode(query).encode('utf-8')).decode('utf-8')
+
+    # Add it
+    callback_url.query.params.add(DBMI_AUTH_CALLBACK_QUERY_KEY, query)
+
+    # Build authorize URL
+    auth0_url = dbmi_settings.AUTH0_DOMAIN if dbmi_settings.AUTH0_DOMAIN else f"{dbmi_settings.AUTH0_TENANT}.auth0.com"
+    authorize_url = furl.furl(f"https://{auth0_url}/authorize")
+
+    # Create a token for state
+    state = secrets.token_urlsafe(32)
+
+    # Add required parameters
+    authorize_url.query.params.add("response_type", "code")
+    authorize_url.query.params.add("client_id", dbmi_settings.AUTH0_CLIENT_ID)
+    authorize_url.query.params.add("redirect_uri", callback_url.url)
+    authorize_url.query.params.add("scope", dbmi_settings.AUTH0_SCOPE)
+    authorize_url.query.params.add("state", state)
+
+    # Create the response
+    response = redirect(authorize_url.url)
+
+    # Place a cookie with state
+    response.set_cookie(
+        DBMI_AUTH_STATE_COOKIE_NAME,
+        state,
+        domain=dbmi_settings.JWT_COOKIE_DOMAIN,
+        secure=True,
+        httponly=True,
+        samesite="Lax"
+    )
+
+    # Place a cookie with query
+    response.set_cookie(
+        DBMI_AUTH_QUERY_COOKIE_NAME,
+        query,
+        domain=dbmi_settings.JWT_COOKIE_DOMAIN,
+        secure=True,
+        httponly=True,
+        samesite="Lax"
+    )
+
+    # Redirect to Auth0
+    return response
 
 
 def callback(request):
@@ -94,10 +165,13 @@ def callback(request):
     auth_url = None
     try:
         # Get the original query sent to dbmi-auth
-        query = QueryDict(base64.urlsafe_b64decode(request.GET.get("query").encode("utf-8")).decode("utf-8"))
+        query = QueryDict(base64.urlsafe_b64decode(
+            request.GET.get(DBMI_AUTH_CALLBACK_QUERY_KEY).encode("utf-8")
+        ).decode("utf-8"))
 
         # Get the return URL
         auth_url = furl.furl(reverse("dbmi_login:login") + "?{}".format(query.urlencode("/")))
+        logger.debug(f"dbmi-auth/login: Backup auth URL: {auth_url.url}")
 
     except Exception as e:
         logger.error("Failed to parse query parameters: {}".format(e), exc_info=True, extra={"request": request})
@@ -119,30 +193,14 @@ def callback(request):
             },
         )
 
-        # Check for disabled third-party cookies
-        if "unable to configure verification" in request.GET.get("error_description", "").lower():
-            logger.debug(f'Auth0 returned an error: {request.GET.get("error")} - {request.GET.get("error_message")}')
-
-            # Add to query for displaying on lock widget
-            auth_url.query.params.add("lock_message_type", "error")
-            auth_url.query.params.add("lock_message", "Cookies must be enabled to authenticate")
-
-        else:
-            logger.debug(f'Auth0 returned an error: {request.GET.get("error")} - {request.GET.get("error_message")}')
-
-            # Add to query for displaying on lock widget
-            auth_url.query.params.add("lock_message_type", "error")
-            auth_url.query.params.add(
-                "lock_message", request.GET.get("error_description", "The service has encountered an unexpected error")
-            )
-
-        # Redirect back to the auth screen and attach the original query
-        return redirect(auth_url.url)
+        # Cannot proceed without code
+        raise SuspiciousOperation()
 
     json_header = {"content-type": "application/json"}
 
     # This is the Auth0 URL we post the code to in order to get token.
-    token_url = "https://%s.auth0.com/oauth/token" % dbmi_settings.AUTH0_TENANT
+    auth0_url = dbmi_settings.AUTH0_DOMAIN if dbmi_settings.AUTH0_DOMAIN else f"{dbmi_settings.AUTH0_TENANT}.auth0.com"
+    token_url = furl.furl(f"https://{auth0_url}/oauth/token")
 
     # Build a URL with the root URI
     callback_url = furl.furl(request.build_absolute_uri(reverse("dbmi_login:callback")))
@@ -157,11 +215,10 @@ def callback(request):
     }
 
     # Post the code to get the token from Auth0.
-    token_response = requests.post(token_url, data=json.dumps(token_payload), headers=json_header)
+    token_response = requests.post(token_url.url, data=json.dumps(token_payload), headers=json_header)
     if not token_response.ok:
         logger.error(
             "Failed to exchange token",
-            exc_info=True,
             extra={
                 "request": request,
                 "response": token_response.content,
@@ -170,22 +227,21 @@ def callback(request):
             },
         )
 
-        # Redirect back to the auth screen and attach the original query
-        return redirect(auth_url.url)
+        # Cannot proceed without token
+        raise SuspiciousOperation()
 
     # Get tokens
     token_info = token_response.json()
 
     # URL we post the token to get user info.
-    url = "https://%s.auth0.com/userinfo?access_token=%s"
-    user_url = url % (dbmi_settings.AUTH0_TENANT, token_info.get("access_token", ""))
+    user_url = furl.furl(f"https://{auth0_url}/userinfo")
+    user_url.query.params.add("access_token", token_info.get("access_token"))
 
     # Get the user info from auth0.
-    user_response = requests.get(user_url)
+    user_response = requests.get(user_url.url)
     if not user_response.ok:
         logger.error(
             "Failed to get user info",
-            exc_info=True,
             extra={
                 "request": request,
                 "response": user_response.content,
@@ -194,39 +250,51 @@ def callback(request):
             },
         )
 
-        # Redirect back to the auth screen and attach the original query
-        return redirect(auth_url.url)
+        # Cannot proceed without user information
+        raise SuspiciousOperation()
 
     # Get user info
     user_info = user_response.json()
     email = user_info.get("email")
     jwt = token_info.get("id_token")
-    if email and jwt:
 
-        # Redirect the user to the page they originally requested.
-        if hasattr(dbmi_settings, "LOGIN_REDIRECT_KEY") and query.get(dbmi_settings.LOGIN_REDIRECT_KEY):
-            redirect_url = query.get(dbmi_settings.LOGIN_REDIRECT_KEY)
+    if not email or not jwt:
+        logger.error(
+            "No email/jwt returned for user info, cannot proceed",
+            extra={'user_info': user_info}
+        )
+        raise SuspiciousOperation()
 
-        elif hasattr(dbmi_settings, "LOGIN_REDIRECT_URL"):
-            redirect_url = dbmi_settings.LOGIN_REDIRECT_URL
+    # Redirect the user to the page they originally requested.
+    if hasattr(dbmi_settings, "LOGIN_REDIRECT_KEY") and query.get(dbmi_settings.LOGIN_REDIRECT_KEY):
+        redirect_url = query.get(dbmi_settings.LOGIN_REDIRECT_KEY)
 
-        else:
-            redirect_url = request.build_absolute_uri(reverse("dbmi_login:jwt"))
-
-        logger.debug("Redirecting user to: {}".format(redirect_url))
-
-        # Set the JWT into a cookie in the response.
-        response = redirect(redirect_url)
-        response.set_cookie(dbmi_settings.JWT_COOKIE_NAME, jwt, domain=dbmi_settings.JWT_COOKIE_DOMAIN, httponly=True)
-
-        return response
+    elif hasattr(dbmi_settings, "LOGIN_REDIRECT_URL"):
+        redirect_url = dbmi_settings.LOGIN_REDIRECT_URL
 
     else:
-        logger.error(
-            "No email/jwt returned for user info, cannot proceed", exc_info=True, extra={"user_info": user_info}
-        )
-        return HttpResponse(status=500)
+        redirect_url = request.build_absolute_uri(reverse("dbmi_login:jwt"))
 
+    logger.debug("Redirecting user to: {}".format(redirect_url))
+
+    # Build response
+    response = redirect(redirect_url)
+
+    # Set the JWT into a cookie in the response.
+    response.set_cookie(
+        dbmi_settings.JWT_COOKIE_NAME,
+        jwt,
+        domain=dbmi_settings.JWT_COOKIE_DOMAIN,
+        secure=True,
+        httponly=True,
+        samesite="Lax"
+    )
+
+    # Delete state and query cookie
+    response.delete_cookie(DBMI_AUTH_STATE_COOKIE_NAME, domain=dbmi_settings.JWT_COOKIE_DOMAIN)
+    response.delete_cookie(DBMI_AUTH_QUERY_COOKIE_NAME, domain=dbmi_settings.JWT_COOKIE_DOMAIN)
+
+    return response
 
 def logout(request):
     """
@@ -243,21 +311,23 @@ def logout(request):
         # Add the client ID
         url.query.params.add("client_id", dbmi_settings.AUTH0_CLIENT_ID)
 
+        # Redirect the user to the logout page
+        next_url = furl.furl(request.build_absolute_uri(reverse("dbmi_login:logout")))
+
         # Look for next url
         if request.GET.get(dbmi_settings.LOGOUT_REDIRECT_KEY):
 
             # Get the passed URL
-            next_url = request.GET.get(dbmi_settings.LOGOUT_REDIRECT_KEY)
-            logger.debug("Will log user out and redirect to: {}".format(next_url))
+            logger.debug('Will log user out and redirect to: {}'.format(
+                request.GET.get(dbmi_settings.LOGOUT_REDIRECT_KEY)
+            ))
+            next_url.query.params.add(
+                dbmi_settings.LOGOUT_REDIRECT_KEY,
+                request.GET.get(dbmi_settings.LOGOUT_REDIRECT_KEY)
+            )
 
-            # Redirect the user
-            url.query.params.set("returnTo", next_url)
-
-        else:
-            logger.debug("Will log user out and redirect to log out page")
-
-            # Redirect the user to the landing page
-            url.query.params.set("returnTo", request.build_absolute_uri(reverse("dbmi_login:logout")))
+        # Redirect the user to the landing page
+        url.query.params.set("returnTo", next_url)
 
         # Log the URL
         logger.debug(f"Logout URL: {url.url}")
@@ -275,6 +345,16 @@ def logout(request):
 
     else:
         logger.debug("User has been logged out, sending to logout page")
+
+        # Look for next url
+        if request.GET.get(dbmi_settings.LOGOUT_REDIRECT_KEY):
+
+            # Get the passed URL
+            next_url = request.GET.get(dbmi_settings.LOGOUT_REDIRECT_KEY)
+
+            # Send them off
+            logger.debug('Will redirect logged out user to: {}'.format(next_url))
+            return redirect(next_url)
 
         # Render the logout landing page
         return render(request, "dbmi_client/login/logout.html")

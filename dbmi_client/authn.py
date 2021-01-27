@@ -111,6 +111,12 @@ def login_redirect_url(request, next_url=None):
         if dbmi_settings.AUTHN_TITLE:
             branding["icon_url"] = dbmi_settings.AUTHN_ICON_URL
 
+        if dbmi_settings.AUTHN_COLOR:
+            branding["color"] = dbmi_settings.AUTHN_COLOR
+
+        if dbmi_settings.AUTHN_BACKGROUND:
+            branding["background"] = dbmi_settings.AUTHN_BACKGROUND
+
         # Encode it and pass it along
         branding_param = base64.urlsafe_b64encode(json.dumps(branding).encode("utf-8")).decode("utf-8")
         login_url.query.params.add("branding", branding_param)
@@ -315,12 +321,13 @@ def validate_request(request):
     return None
 
 
-def get_public_keys_from_auth0(tenant, refresh=False):
+def get_public_keys_from_auth0(tenant, domain=None, refresh=False):
     """
     Retrieves the public key from Auth0 to verify JWTs. Will
     cache the JSON response from Auth0 in Django settings
     until instructed to refresh the JWKS.
     :param tenant: The Auth0 tenant to fetch JWKs for
+    :param domain: The domain to use if custom
     :param refresh: Purges cached JWK and fetches from remote
     :return: dict
     """
@@ -341,8 +348,11 @@ def get_public_keys_from_auth0(tenant, refresh=False):
 
             logger.debug("Fetching remote JWKS")
 
+            # Set host
+            host = domain if domain else f"{tenant}.auth0.com"
+
             # Build the JWKs URL
-            url = furl().set(scheme="https", host="{}.auth0.com".format(tenant))
+            url = furl().set(scheme="https", host=host)
             url.path.segments.extend([".well-known", "jwks.json"])
 
             # Make the request
@@ -369,7 +379,7 @@ def get_public_keys_from_auth0(tenant, refresh=False):
     return None
 
 
-def retrieve_public_key(tenant, jwt_string):
+def retrieve_public_key(tenant, jwt_string, domain=None):
     """
     Gets the public key used to sign the JWT from the public JWK
     hosted on Auth0. Auth0 typically only returns one public key
@@ -384,12 +394,13 @@ def retrieve_public_key(tenant, jwt_string):
     Returns the key ID if found, otherwise returns None
     :param tenant: The Auth0 tenant to fetch JWKs for
     :param jwt_string: The JWT token as a string
+    :param domain: The domain to use for JWKs if necessary
     :return: str
     """
 
     try:
         # Get the JWK
-        jwks = get_public_keys_from_auth0(tenant, refresh=False)
+        jwks = get_public_keys_from_auth0(tenant, domain=domain, refresh=False)
         if not jwks:
             logger.debug("Could not fetch JWKs from Auth0, just fail out now")
             return None
@@ -405,7 +416,7 @@ def retrieve_public_key(tenant, jwt_string):
             logger.debug("Cached JWK keys: {}".format([jwk["kid"] for jwk in jwks["keys"]]))
 
             # No match found, refresh the jwks
-            jwks = get_public_keys_from_auth0(tenant, refresh=True)
+            jwks = get_public_keys_from_auth0(tenant, domain=domain, refresh=True)
             logger.debug("Refreshed JWK keys: {}".format([jwk["kid"] for jwk in jwks["keys"]]))
 
             # Try it again
@@ -457,6 +468,11 @@ def validate_rs256_jwt(jwt_string):
     try:
         jwt_client_id = str(jwt.decode(jwt_string, verify=False)["aud"])
 
+        # Check for custom domain
+        domain = getattr(dbmi_settings, "AUTH0_DOMAIN", None)
+        if domain:
+            logger.debug(f"Using custom domain: {domain}")
+
         # Check if multiple clients are specified at the client level
         if hasattr(dbmi_settings, "AUTH0_CLIENTS") and getattr(dbmi_settings, "AUTH0_CLIENTS"):
 
@@ -466,7 +482,7 @@ def validate_rs256_jwt(jwt_string):
                 logger.debug(f"JWT Client ID matched to tenant: {tenant}")
 
                 # Get the public key
-                jwk_pub_key = retrieve_public_key(tenant, jwt_string)
+                jwk_pub_key = retrieve_public_key(tenant, jwt_string, domain)
 
             # Log if not found
             else:
@@ -479,7 +495,7 @@ def validate_rs256_jwt(jwt_string):
             for tenant in dbmi_settings.AUTH0_TENANTS:
                 try:
                     # Get the public key
-                    jwk_pub_key = retrieve_public_key(tenant, jwt_string)
+                    jwk_pub_key = retrieve_public_key(tenant, jwt_string, domain)
 
                     # A public key was returned, we've got a JWT from this tenant
                     if jwk_pub_key:
@@ -496,7 +512,7 @@ def validate_rs256_jwt(jwt_string):
         if not jwk_pub_key and jwt_client_id == dbmi_settings.AUTH0_CLIENT_ID:
 
             # Get the public key
-            jwk_pub_key = retrieve_public_key(dbmi_settings.AUTH0_TENANT, jwt_string)
+            jwk_pub_key = retrieve_public_key(dbmi_settings.AUTH0_TENANT, jwt_string, domain)
 
         if not jwk_pub_key:
             logger.warning(f"JWT Client ID could not be matched: {jwt_client_id}")
