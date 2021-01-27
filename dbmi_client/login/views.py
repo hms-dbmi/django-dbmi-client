@@ -5,9 +5,9 @@ import furl
 import secrets
 from urllib.parse import urlencode
 
-from django.core.exceptions import PermissionDenied, SuspiciousOperation
+from django.core.exceptions import SuspiciousOperation
 from django.shortcuts import render, redirect, reverse
-from django.http import HttpResponse, QueryDict
+from django.http import QueryDict
 from dbmi_client.settings import dbmi_settings
 from dbmi_client.authn import validate_request, get_jwt
 from django.contrib import auth as django_auth
