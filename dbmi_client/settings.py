@@ -77,6 +77,12 @@ CONFIG_DEFAULTS = {
     "USER_MODEL_AUTOCREATE": True,
     # These configurations are specific to DRF related auth/permissions
     "DRF_OBJECT_OWNER_KEY": "user",
+    # Jira support desk properties
+    "JIRA_ORGANIZATION": "hms-dbmi",
+    "JIRA_SERVICE_DESK": None,
+    "JIRA_SERVICE_DESK_EMAIL": None,
+    "JIRA_USERNAME": None,
+    "JIRA_TOKEN": None,
     # Filservice
     "FILESERVICE_TOKEN": None,  # The authentication token to be used with Fileservice
     "FILESERVICE_BUCKETS": [],  # The name of the S3 buckets Fileservice should use
