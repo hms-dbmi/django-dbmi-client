@@ -30,6 +30,9 @@ class Support:
         Returns the authentication object used to authenticate calls to Jira's
         API.
         """
+        if not dbmi_settings.JIRA_USERNAME or not dbmi_settings.JIRA_TOKEN:
+            raise SystemError("Cannot use Support without configured Jira credentials")
+
         return (dbmi_settings.JIRA_USERNAME, dbmi_settings.JIRA_TOKEN)
 
     @classmethod
@@ -47,6 +50,7 @@ class Support:
         :return: A list of all objects returned
         :rtype: list
         """
+        content = None
         try:
             # Collect results
             objects = []
@@ -57,6 +61,7 @@ class Support:
 
                 # Pull a page
                 response = requests.get(next_url, headers=cls._headers(), auth=cls._auth())
+                content = response.content
                 response.raise_for_status()
 
                 # Check for filter and apply it
@@ -84,6 +89,7 @@ class Support:
                 exc_info=True,
                 extra={
                     "url": url,
+                    "content": content,
                 }
             )
 
@@ -204,7 +210,10 @@ class Support:
         :type email: str
         :param name: The name of the customer to create
         :type name: str
+        :return: A tuple of operation success and response data
+        :rtype: boolean, object
         """
+        content = None
         try:
             # Make the request
             url = furl(f"https://{dbmi_settings.JIRA_ORGANIZATION}.atlassian.net")
@@ -218,16 +227,23 @@ class Support:
 
             # Pull a page
             response = requests.post(url.url, json=data, headers=cls._headers(), auth=cls._auth())
+            content = response.content
             response.raise_for_status()
 
             # Return ID
-            return response.json()["accountId"]
+            return response.ok, response.json()
 
         except Exception as e:
             logger.exception(
-                f"Support: Error querying Jira customers: {e}",
+                f"Support: Error creating Jira customer: {e}",
                 exc_info=True,
+                extra={
+                    'email': email,
+                    'response': response,
+                }
             )
+
+        return False, content
 
     @classmethod
     def add_customer_to_service_desk(cls, customer_id):
@@ -237,7 +253,10 @@ class Support:
 
         :param customer_id: The ID of the user to add
         :type customer_id: str
+        :return: A tuple of operation success and response data
+        :rtype: boolean, object
         """
+        content = None
         try:
             # Make the request /rest/servicedeskapi/servicedesk/{serviceDeskId}/customer
             url = furl(f"https://{dbmi_settings.JIRA_ORGANIZATION}.atlassian.net")
@@ -248,16 +267,23 @@ class Support:
 
             # Pull a page
             response = requests.post(url.url, json=data, headers=cls._headers(), auth=cls._auth())
+            content = response.content
             response.raise_for_status()
 
             # Return ID
-            return response.json()
+            return response.ok, response.json()
 
         except Exception as e:
             logger.exception(
-                f"Support: Error adding customers to service desk: {e}",
+                f"Support: Error adding customer to service desk: {e}",
                 exc_info=True,
+                extra={
+                    'customer_id': customer_id,
+                    'response': response,
+                }
             )
+
+        return False, content
 
     @classmethod
     def add_customer_to_organization(cls, customer_id, organization_id):
@@ -268,7 +294,10 @@ class Support:
         :type customer_id: str
         :param organization_id: The ID of the organization
         :type organization_id: str
+        :return: A tuple of operation success and response data
+        :rtype: boolean, object
         """
+        content = None
         try:
             # Make the request
             url = furl(f"https://{dbmi_settings.JIRA_ORGANIZATION}.atlassian.net")
@@ -279,16 +308,24 @@ class Support:
 
             # Pull a page
             response = requests.post(url.url, json=data, headers=cls._headers(), auth=cls._auth())
+            content = response.content
             response.raise_for_status()
 
             # Return ID
-            return response.json()
+            return response.ok, response.json()
 
         except Exception as e:
             logger.exception(
-                f"Support: Error querying Jira customers: {e}",
+                f"Support: Error adding customer to organization: {e}",
                 exc_info=True,
+                extra={
+                    'customer_id': customer_id,
+                    'organization_id': organization_id,
+                    'response': response,
+                }
             )
+
+        return False, content
 
     @classmethod
     def create_request(cls, customer, request_type_id, subject, request, labels=None):
@@ -306,6 +343,7 @@ class Support:
         :return: Whether the request succeeded and the object
         :rtype: bool, dict
         """
+        content = None
         try:
             # Get the service desk ID
             service_desk_id = cls.get_service_desk_id()
@@ -333,6 +371,7 @@ class Support:
 
             # Pull a page
             response = requests.post(url.url, json=data, headers=cls._headers(), auth=cls._auth())
+            content = response.content
             response.raise_for_status()
 
             # Return ID
@@ -342,7 +381,15 @@ class Support:
             logger.exception(
                 f"Support: Error creating Jira request: {e}",
                 exc_info=True,
+                extra={
+                    'customer': customer,
+                    'request_type': request_type_id,
+                    'labels': labels,
+                    'response': response,
+                }
             )
+
+        return False, content
 
     @classmethod
     def email_request(cls, email, subject, message):
