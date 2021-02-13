@@ -3,6 +3,7 @@ name: Prerelease Deploy
 on:
   push:
     branches: [ development, beta, alpha ]
+  workflow_dispatch:
 
 jobs:
   test:
