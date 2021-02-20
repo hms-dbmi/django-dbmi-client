@@ -466,7 +466,11 @@ def validate_rs256_jwt(jwt_string):
 
     # Determine which Auth0 Client ID (aud) this JWT pertains to.
     try:
-        jwt_client_id = str(jwt.decode(jwt_string, verify=False)["aud"])
+        jwt_client_id = str(jwt.decode(
+            jwt_string,
+            algorithms=["RS256"],
+            options={"verify_signature": False}
+        )["aud"])
 
         # Check for custom domain
         domain = getattr(dbmi_settings, "AUTH0_DOMAIN", None)
@@ -580,7 +584,11 @@ def validate_hs256_jwt(jwt_string):
     # Determine which Auth0 Client ID (aud) this JWT pertains to.
     jwt_client_id = None
     try:
-        jwt_client_id = str(jwt.decode(jwt_string, verify=False)["aud"])
+        jwt_client_id = str(jwt.decode(
+            jwt_string,
+            algorithms=["HS256"],
+            options={"verify_signature": False}
+        )["aud"])
 
         # Perform the validation
         payload = jwt.decode(
