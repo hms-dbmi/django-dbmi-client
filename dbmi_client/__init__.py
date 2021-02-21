@@ -3,7 +3,7 @@ DBMI Client
 """
 
 __title__ = "DBMI Client"
-__version__ = "0.4.2"
+__version__ = "0.4.3"
 __author__ = "Bryan Larson"
 __license__ = "BSD 2-Clause"
 __copyright__ = "Copyright 2011-2020 Harvard Medical School Department of Biomedical Informatics"
