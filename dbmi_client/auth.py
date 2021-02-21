@@ -1,4 +1,5 @@
 from django.core.exceptions import PermissionDenied
+from django.http import HttpResponse
 
 from dbmi_client.settings import dbmi_settings
 from dbmi_client import authn
@@ -8,6 +9,29 @@ from dbmi_client import authz
 import logging
 
 logger = logging.getLogger(dbmi_settings.LOGGER_NAME)
+
+
+def unauthorized_response(request):
+    """
+    This method is used to return a response in the event a user is not
+    authenticated. This differentiates normal HTTP calls from AJAX and
+    formats the response accordingly.
+
+    :param request: The current HttpRequest
+    :type request: HttpRequest
+    :returns: The HttpResponse for the unauthorized call
+    :rtype: HttpResponse
+    """
+    # If AJAX, return unauthorized
+    if request.is_ajax():
+
+        # Return unauthorized and put login URL in headers
+        response = HttpResponse('401 Unauthorized', status=401)
+        response['X-DBMI-LOGIN-URL'] = authn.login_redirect_url(request)
+
+        return response
+
+    return authn.login_redirect(request)
 
 
 def dbmi_user(view):
@@ -23,7 +47,7 @@ def dbmi_user(view):
 
         # Check for current user
         if not request.user or not request.user.is_authenticated:
-            return authn.login_redirect(request)
+            return unauthorized_response(request)
 
         # Let it go
         return view(request, *args, **kwargs)
@@ -44,7 +68,7 @@ def dbmi_admin(view):
 
         # Check for current user
         if not request.user or not request.user.is_authenticated:
-            return authn.login_redirect(request)
+            return unauthorized_response(request)
 
         # Get the payload
         payload = authn.get_jwt_payload(request, verify=False)
@@ -85,7 +109,7 @@ def dbmi_group(group):
 
             # Check for current user
             if not request.user or not request.user.is_authenticated:
-                return authn.login_redirect(request)
+                return unauthorized_response(request)
 
             # Get the payload
             payload = authn.get_jwt_payload(request, verify=False)
@@ -122,7 +146,7 @@ def dbmi_role(role):
 
             # Check for current user
             if not request.user or not request.user.is_authenticated:
-                return authn.login_redirect(request)
+                return unauthorized_response(request)
 
             # Get the payload
             payload = authn.get_jwt_payload(request, verify=False)
@@ -159,7 +183,7 @@ def dbmi_app_permission(permission):
 
             # Check for current user
             if not request.user or not request.user.is_authenticated:
-                return authn.login_redirect(request)
+                return unauthorized_response(request)
 
             # Get the payload
             payload = authn.get_jwt_payload(request, verify=False)
@@ -205,7 +229,7 @@ def dbmi_item_permission(item, permission):
 
             # Check for current user
             if not request.user or not request.user.is_authenticated:
-                return authn.login_redirect(request)
+                return unauthorized_response(request)
 
             # Get their email address
             email = authn.get_jwt_email(request, verify=False)
