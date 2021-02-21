@@ -403,7 +403,7 @@ class Support:
         :param message: The body of the request
         :type message: str
         :return: Whether the request succeeded and the object
-        :rtype: bool, dict
+        :rtype: bool
         """
         # Check configs
         if not dbmi_settings.JIRA_SERVICE_DESK_EMAIL:
@@ -411,16 +411,20 @@ class Support:
 
         try:
             # Send it
-            send_mail(
-                subject,
-                message,
-                email,
-                [dbmi_settings.JIRA_SERVICE_DESK_EMAIL],
+            success = send_mail(
+                subject=subject,
+                message=message,
+                from_email=email,
+                recipient_list=[dbmi_settings.JIRA_SERVICE_DESK_EMAIL],
                 fail_silently=False,
             )
+
+            return success
 
         except Exception as e:
             logger.exception(
                 f"Support: Error emailing Jira: {e}",
                 exc_info=True,
             )
+
+        return False
