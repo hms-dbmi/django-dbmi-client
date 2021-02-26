@@ -7,7 +7,6 @@ from dbmi_client import authz
 
 # Get the app logger
 import logging
-
 logger = logging.getLogger(dbmi_settings.LOGGER_NAME)
 
 
@@ -27,7 +26,18 @@ def unauthorized_response(request):
 
         # Return unauthorized and put login URL in headers
         response = HttpResponse('401 Unauthorized', status=401)
+
+        # Get the next URL
+        next_url = request.build_absolute_uri()
+
+        # If the request was not a GET, redirect back to referrer
+        if request.method not in ['HEAD', 'GET']:
+            next_url = request.META.get('HTTP_REFERER', next_url)
         response['X-DBMI-LOGIN-URL'] = authn.login_redirect_url(request)
+
+        # Log it
+        logger.debug(f"DBMI/Auth: Unauthorized AJAX, next URL: {next_url}")
+        response['X-DBMI-LOGIN-URL'] = authn.login_redirect_url(request, next_url)
 
         return response
 
