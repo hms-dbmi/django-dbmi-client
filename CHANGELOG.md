@@ -1,3 +1,15 @@
+# [1.0.0-beta.1](https://github.com/hms-dbmi/django-dbmi-client/compare/v0.4.4...v1.0.0-beta.1) (2021-06-30)
+
+
+### Features
+
+* **jwt:** Updated JWT calls for pyJWT >= 2.x ([d474b89](https://github.com/hms-dbmi/django-dbmi-client/commit/d474b898185488b75fd21cecac54ada71dc1d055))
+
+
+### BREAKING CHANGES
+
+* **jwt:** JWT validation methods are not compatible with pyJWT < 2.x
+
 # Changelog
 
 <!--next-version-placeholder-->
