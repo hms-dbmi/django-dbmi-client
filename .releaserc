@@ -8,11 +8,14 @@
     "plugins": [
         "@semantic-release/commit-analyzer",
         "@semantic-release/release-notes-generator",
+        ["@semantic-release/changelog", {
+            "changelogFile": "CHANGELOG.md"
+        }],
         ["@semantic-release/exec", {
           "prepareCmd": "sed -ie \"s/^__version__.*/__version__ = \\x22${nextRelease.version}\\x22/g\" dbmi_client/__init__.py && python setup.py sdist bdist_wheel"
         }],
         ["@semantic-release/git", {
-            "assets": ["dbmi_client/__init__.py"],
+            "assets": ["dbmi_client/__init__.py", "CHANGELOG.md"],
         }],
         ["@semantic-release/github", {
             "assets": ["dist/*"]
