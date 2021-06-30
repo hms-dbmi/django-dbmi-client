@@ -4,6 +4,6 @@ cryptography
 requests
 jwcrypto
 furl
-pyjwt
+pyjwt>=2
 django-bootstrap3
-raven>=6.9.0
+raven>=6.9

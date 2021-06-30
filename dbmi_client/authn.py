@@ -257,7 +257,7 @@ def get_jwt_payload(request, verify=True):
 
     # Get the payload email
     if not verify:
-        return jwt.decode(token, verify=False)
+        return jwt.decode(token, options={"verify_signature": False})
 
     else:
         return validate_rs256_jwt(token)
@@ -466,7 +466,9 @@ def validate_rs256_jwt(jwt_string):
 
     # Determine which Auth0 Client ID (aud) this JWT pertains to.
     try:
-        jwt_client_id = str(jwt.decode(jwt_string, verify=False)["aud"])
+        jwt_client_id = str(
+            jwt.decode(jwt_string, options={"verify_signature": False})["aud"]
+            )
 
         # Check for custom domain
         domain = getattr(dbmi_settings, "AUTH0_DOMAIN", None)
@@ -577,18 +579,14 @@ def validate_hs256_jwt(jwt_string):
         logger.error("Cannot verify HS256 tokens without client ID and client secret")
         raise PermissionDenied
 
-    # Determine which Auth0 Client ID (aud) this JWT pertains to.
-    jwt_client_id = None
     try:
-        jwt_client_id = str(jwt.decode(jwt_string, verify=False)["aud"])
-
         # Perform the validation
         payload = jwt.decode(
             jwt_string,
             base64.b64decode(dbmi_settings.AUTH0_SECRET, "-_"),
             algorithms=["HS256"],
             leeway=120,
-            audience=jwt_client_id,
+            audience=dbmi_settings.AUTH0_CLIENT_ID,
         )
 
         return payload
@@ -597,7 +595,7 @@ def validate_hs256_jwt(jwt_string):
         logger.debug(
             "JWT Expired: {}".format(e),
             extra={
-                "jwt_client_id": jwt_client_id,
+                "jwt_client_id": dbmi_settings.AUTH0_CLIENT_ID,
             },
         )
 
@@ -605,7 +603,7 @@ def validate_hs256_jwt(jwt_string):
         logger.info(
             "Invalid JWT Token: {}".format(e),
             extra={
-                "jwt_client_id": jwt_client_id,
+                "jwt_client_id": dbmi_settings.AUTH0_CLIENT_ID,
             },
         )
 
@@ -614,7 +612,7 @@ def validate_hs256_jwt(jwt_string):
             f"Error validating JWT: {e}",
             exc_info=True,
             extra={
-                "jwt_client_id": jwt_client_id,
+                "jwt_client_id": dbmi_settings.AUTH0_CLIENT_ID,
             },
         )
 
