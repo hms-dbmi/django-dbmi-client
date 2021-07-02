@@ -1,3 +1,10 @@
+## [0.4.5](https://github.com/hms-dbmi/django-dbmi-client/compare/v0.4.4...v0.4.5) (2021-07-02)
+
+
+### Bug Fixes
+
+* **requirements:** Set to only install pyJWT up to v2.x due to breaking changes introduced in v2 ([0dd4043](https://github.com/hms-dbmi/django-dbmi-client/commit/0dd4043aba8a620b475b0ae308b6b7e785169412))
+
 # Changelog
 
 <!--next-version-placeholder-->
