@@ -148,9 +148,6 @@ class DBMIUsersAuthenticationMiddleware(DBMIAuthenticationMiddleware):
                 if user and user.is_authenticated:
                     logger.debug("User has re-authenticated: {}".format(username))
 
-                    # Store this user in session
-                    django_auth.login(request, user)
-
                     # Check updated status
                     if user.is_superuser or user.is_staff:
                         logger.debug(f'User "{username}":"{email}" is still admin')
