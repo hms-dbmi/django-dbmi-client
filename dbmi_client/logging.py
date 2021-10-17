@@ -37,6 +37,11 @@ def config(service, sentry=True, root_level=logging.WARNING):
                 "level": "ERROR",
                 "propagate": True,
             },
+            'py.warnings': {
+                'handlers': ['console'],
+                'level': 'WARNING',
+                'propagate': True
+            },
         },
     }
 
