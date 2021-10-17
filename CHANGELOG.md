@@ -1,3 +1,10 @@
+## [0.4.6](https://github.com/hms-dbmi/django-dbmi-client/compare/v0.4.5...v0.4.6) (2021-10-17)
+
+
+### Bug Fixes
+
+* **authn:** PPM-729 - Fixed issue where session users were being logged in with every request, constantly resetting the CSRF tokens; minor logging tweaks ([25f3778](https://github.com/hms-dbmi/django-dbmi-client/commit/25f3778bf2455028cdac186742ac928276233fb0))
+
 ## [0.4.5](https://github.com/hms-dbmi/django-dbmi-client/compare/v0.4.4...v0.4.5) (2021-07-02)
 
 
