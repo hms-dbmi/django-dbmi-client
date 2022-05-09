@@ -1,3 +1,10 @@
+## [0.4.7](https://github.com/hms-dbmi/django-dbmi-client/compare/v0.4.6...v0.4.7) (2022-05-09)
+
+
+### Bug Fixes
+
+* **authn:** Resolved issue with decoding non-existent JWTs ([cbb84c2](https://github.com/hms-dbmi/django-dbmi-client/commit/cbb84c24da4814d376bab10ebec0f9221379d251))
+
 ## [0.4.6](https://github.com/hms-dbmi/django-dbmi-client/compare/v0.4.5...v0.4.6) (2021-10-17)
 
 
