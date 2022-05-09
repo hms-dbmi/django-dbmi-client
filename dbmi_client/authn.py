@@ -255,6 +255,10 @@ def get_jwt_payload(request, verify=True):
     # Get the JWT token depending on request type
     token = get_jwt(request)
 
+    # Ensure we have a token
+    if not token:
+        return None
+
     # Get the payload email
     if not verify:
         return jwt.decode(token, verify=False)
