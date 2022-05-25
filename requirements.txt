@@ -1,9 +1,9 @@
-django>=1.11
-djangorestframework
-cryptography
+django>=2.2
+djangorestframework>=3.12
+cryptography>=3.0
 requests
 jwcrypto
 furl
-pyjwt<2.0
+pyjwt<3.0
 django-bootstrap3
 raven>=6.9.0
