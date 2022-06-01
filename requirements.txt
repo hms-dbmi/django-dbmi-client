@@ -2,7 +2,7 @@ django>=2.2
 djangorestframework>=3.12
 cryptography>=3.0
 requests
-jwcrypto
+jwcrypto<2.0
 furl
 pyjwt<3.0
 django-bootstrap3

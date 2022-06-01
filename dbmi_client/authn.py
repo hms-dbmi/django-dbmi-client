@@ -473,7 +473,10 @@ def validate_rs256_jwt(jwt_string):
         jwt_client_id = str(jwt.decode(
             jwt_string,
             algorithms=["RS256"],
-            options={"verify_signature": False}
+            options={
+                "verify_signature": False,
+                "verify_audience": False,
+            }
         )["aud"])
 
         # Check for custom domain
