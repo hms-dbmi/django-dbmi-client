@@ -1,3 +1,10 @@
+## [0.5.1](https://github.com/hms-dbmi/django-dbmi-client/compare/v0.5.0...v0.5.1) (2022-06-01)
+
+
+### Bug Fixes
+
+* **authn:** DBMISVC-118 - Fixed decode usage ([e90bcc8](https://github.com/hms-dbmi/django-dbmi-client/commit/e90bcc899acf8cc0040869c3d812d5fdf3223a20))
+
 # [0.5.0](https://github.com/hms-dbmi/django-dbmi-client/compare/v0.4.7...v0.5.0) (2022-06-01)
 
 
