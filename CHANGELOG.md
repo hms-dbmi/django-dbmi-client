@@ -1,3 +1,15 @@
+# [0.5.0](https://github.com/hms-dbmi/django-dbmi-client/compare/v0.4.7...v0.5.0) (2022-06-01)
+
+
+### Bug Fixes
+
+* **authn:** DBMISVC-118 - Updated HS256 decoding process ([4d7da02](https://github.com/hms-dbmi/django-dbmi-client/commit/4d7da029403987ed18fd400b9af0161cd451b5df))
+
+
+### Features
+
+* **authn:** DBMISVC-118 - Updated to current version of PyJWT ([ee68f79](https://github.com/hms-dbmi/django-dbmi-client/commit/ee68f794695e42e99ff50c8f0f076002768a5c9b))
+
 ## [0.4.7](https://github.com/hms-dbmi/django-dbmi-client/compare/v0.4.6...v0.4.7) (2022-05-09)
 
 
