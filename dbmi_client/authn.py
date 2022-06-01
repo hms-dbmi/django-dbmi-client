@@ -261,7 +261,13 @@ def get_jwt_payload(request, verify=True):
 
     # Get the payload email
     if not verify:
-        return jwt.decode(token, verify=False)
+        return jwt.decode(
+            token,
+            algorithms=["RS256"],
+            options={
+                "verify_signature": False,
+            }
+        )
 
     else:
         return validate_rs256_jwt(token)
@@ -475,7 +481,7 @@ def validate_rs256_jwt(jwt_string):
             algorithms=["RS256"],
             options={
                 "verify_signature": False,
-                "verify_audience": False,
+                "verify_aud": False,
             }
         )["aud"])
 
