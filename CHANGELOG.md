@@ -1,3 +1,10 @@
+## [0.5.2](https://github.com/hms-dbmi/django-dbmi-client/compare/v0.5.1...v0.5.2) (2022-08-04)
+
+
+### Bug Fixes
+
+* **authn:** Fixed method to get JWT payload without verifying aud ([aad5cae](https://github.com/hms-dbmi/django-dbmi-client/commit/aad5caee8717c09bba5699d05df10a53f11db970))
+
 ## [0.5.1](https://github.com/hms-dbmi/django-dbmi-client/compare/v0.5.0...v0.5.1) (2022-06-01)
 
 
