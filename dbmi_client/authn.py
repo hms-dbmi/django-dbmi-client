@@ -266,6 +266,7 @@ def get_jwt_payload(request, verify=True):
             algorithms=["RS256"],
             options={
                 "verify_signature": False,
+                "verify_aud": False,
             }
         )
 
