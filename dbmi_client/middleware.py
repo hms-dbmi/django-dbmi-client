@@ -38,7 +38,15 @@ class DBMIAuthenticationMiddleware(MiddlewareMixin):
     """
 
     def process_request(self, request):
-        request.user = SimpleLazyObject(lambda: self.__class__.get_jwt_user(request))
+        # Check for an existing, authenticated user. If present, an existing
+        # authentication method has already logged a user in and nothing
+        # more needs to be done here.
+        if hasattr(request, "user") and getattr(request.user, "is_authenticated", False):
+            from django.contrib.auth import BACKEND_SESSION_KEY
+            backend = request.session.get(BACKEND_SESSION_KEY)
+            logger.debug(f"DBMI/AuthN: Existing authenticated User: {request.user.username} / Backend: {backend}")
+        else:
+            request.user = SimpleLazyObject(lambda: self.__class__.get_jwt_user(request))
 
     @staticmethod
     def get_jwt_user(request):
@@ -124,7 +132,7 @@ class DBMIUsersAuthenticationMiddleware(DBMIAuthenticationMiddleware):
     """
 
     def process_request(self, request):
-        request.user = SimpleLazyObject(lambda: self.__class__.get_jwt_user(request))
+        super(DBMIUsersAuthenticationMiddleware, self).process_request(request)
 
     @staticmethod
     def get_jwt_user(request):
@@ -177,7 +185,15 @@ class DBMIJWTAuthenticationMiddleware(MiddlewareMixin):
     """
 
     def process_request(self, request):
-        request.user = SimpleLazyObject(lambda: self.__class__.get_jwt_user(request))
+        # Check for an existing, authenticated user. If present, an existing
+        # authentication method has already logged a user in and nothing
+        # more needs to be done here.
+        if hasattr(request, "user") and getattr(request.user, "is_authenticated", False):
+            from django.contrib.auth import BACKEND_SESSION_KEY
+            backend = request.session.get(BACKEND_SESSION_KEY)
+            logger.debug(f"DBMI/AuthN: Existing authenticated User: {request.user.username} / Backend: {backend}")
+        else:
+            request.user = SimpleLazyObject(lambda: self.__class__.get_jwt_user(request))
 
     @staticmethod
     def get_jwt_user(request):
