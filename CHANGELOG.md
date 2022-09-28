@@ -1,3 +1,10 @@
+## [0.5.4](https://github.com/hms-dbmi/django-dbmi-client/compare/v0.5.3...v0.5.4) (2022-09-28)
+
+
+### Bug Fixes
+
+* **middleware:** DBMISVC-101 - Improved middleware compatibility with other auth middlewares/backends ([c07f14f](https://github.com/hms-dbmi/django-dbmi-client/commit/c07f14f2cead14b4bf2a6e11d6df7893ba6b229d))
+
 ## [0.5.3](https://github.com/hms-dbmi/django-dbmi-client/compare/v0.5.2...v0.5.3) (2022-09-28)
 
 
