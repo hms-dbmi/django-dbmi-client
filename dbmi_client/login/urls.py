@@ -1,13 +1,13 @@
-from django.conf.urls import url
+from django.urls import re_path
 
 from dbmi_client.login import views
 
 app_name = "dbmi_login"
 
 urlpatterns = [
-    url(r"^login/?$", views.login, name="login"),
-    url(r"^callback/?$", views.callback, name="callback"),
-    url(r"^logout/?$", views.logout, name="logout"),
-    url(r"^jwt/?$", views.token, name="jwt"),
-    url(r"^$", views.token, name="jwt"),
+    re_path(r"^login/?$", views.login, name="login"),
+    re_path(r"^callback/?$", views.callback, name="callback"),
+    re_path(r"^logout/?$", views.logout, name="logout"),
+    re_path(r"^jwt/?$", views.token, name="jwt"),
+    re_path(r"^$", views.token, name="jwt"),
 ]
