@@ -22,7 +22,7 @@ def unauthorized_response(request):
     :rtype: HttpResponse
     """
     # If AJAX, return unauthorized
-    if request.is_ajax():
+    if request.META.get('HTTP_X_REQUESTED_WITH') == 'XMLHttpRequest':
 
         # Return unauthorized and put login URL in headers
         response = HttpResponse('401 Unauthorized', status=401)
