@@ -1,3 +1,10 @@
+## [0.5.3](https://github.com/hms-dbmi/django-dbmi-client/compare/v0.5.2...v0.5.3) (2022-09-28)
+
+
+### Bug Fixes
+
+* **django:** Fixed to support Django 4.x ([fac5575](https://github.com/hms-dbmi/django-dbmi-client/commit/fac5575c5cc323625cc95d0d642dc00238444475))
+
 ## [0.5.2](https://github.com/hms-dbmi/django-dbmi-client/compare/v0.5.1...v0.5.2) (2022-08-04)
 
 
