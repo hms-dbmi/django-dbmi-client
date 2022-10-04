@@ -2,8 +2,7 @@ import jwt
 from furl import furl
 import json
 import base64
-import requests
-import jwcrypto.jwk as jwk
+from jwt import PyJWKClient
 
 from django.apps import apps
 from django.contrib import auth as django_auth
@@ -23,6 +22,7 @@ from dbmi_client.serializers import UserSerializer
 import logging
 
 logger = logging.getLogger(dbmi_settings.LOGGER_NAME)
+
 
 # Set a key to cache JWKs under in the DBMI.AUTH0 settings
 CACHED_JWKS_KEY = "__DBMI_CLIENT_CACHED_JWKS__"
@@ -76,7 +76,7 @@ def login_redirect_url(request, next_url=None):
     if apps.is_installed("dbmi_client.login"):
 
         # Use local login URL
-        login_url = furl(request.build_absolute_uri(reverse("dbmi_login:login")))
+        login_url = furl(request.build_absolute_uri(reverse("dbmi_login:authorize")))
 
     else:
 
@@ -93,12 +93,13 @@ def login_redirect_url(request, next_url=None):
             next_url = request.build_absolute_uri()
 
     # Add next url
-    logger.debug("Login next URL: {}".format(next_url))
     login_url.query.params.add(dbmi_settings.LOGIN_REDIRECT_KEY, next_url)
+    logger.debug(f"Login next URL: {next_url}")
 
-    # Add the default client ID, if specified
-    if hasattr(dbmi_settings, "AUTH0_CLIENT_ID") and getattr(dbmi_settings, "AUTH0_CLIENT_ID"):
-        login_url.query.params.add("client_id", dbmi_settings.AUTH0_CLIENT_ID)
+    # Add the default client ID
+    client_id = next(iter(dbmi_settings.AUTH_CLIENTS.keys()))
+    login_url.query.params.add("client_id", client_id)
+    logger.debug(f"Auth client ID: {client_id}")
 
     # Check for branding
     if dbmi_settings.AUTHN_TITLE or dbmi_settings.AUTHN_ICON_URL:
@@ -184,9 +185,8 @@ def logout_redirect_url(request, next_url=None):
     # Add next url
     logout_url.query.params.add(dbmi_settings.LOGOUT_REDIRECT_KEY, next_url)
 
-    # Add the default client ID, if specified
-    if hasattr(dbmi_settings, "AUTH0_CLIENT_ID") and getattr(dbmi_settings, "AUTH0_CLIENT_ID"):
-        logout_url.query.params.add("client_id", dbmi_settings.AUTH0_CLIENT_ID)
+    # Add the default client ID for the current JWT
+    logout_url.query.params.add("client_id", get_jwt_client_id(request, verify=False))
 
     # Check for branding
     if dbmi_settings.AUTHN_TITLE or dbmi_settings.AUTHN_ICON_URL:
@@ -230,8 +230,11 @@ def dbmi_http_headers(request, content_type="application/json", **kwargs):
 def get_jwt(request):
     """
     Takes a Django request and pulls the JWT from either cookies or HTTP headers
-    :param request: The Django request
-    :return: The JWT, if found
+
+    :param request: The current HttpRequest object
+    :type request: HttpRequest
+    :returns: The JWT string
+    :rtype: str
     """
     # Get the JWT token depending on request type
     if hasattr(request, "COOKIES") and request.COOKIES.get(dbmi_settings.JWT_COOKIE_NAME):
@@ -251,7 +254,16 @@ def get_jwt(request):
 
 
 def get_jwt_payload(request, verify=True):
+    """
+    Returns the payload from the current JWT
 
+    :param request: The current HttpRequest object
+    :type request: HttpRequest
+    :param verify: Whether to verify the JWT signature first
+    :type verify: bool
+    :returns: The JWT payload
+    :rtype: dict
+    """
     # Get the JWT token depending on request type
     token = get_jwt(request)
 
@@ -261,21 +273,36 @@ def get_jwt_payload(request, verify=True):
 
     # Get the payload email
     if not verify:
-        return jwt.decode(
-            token,
-            algorithms=["RS256"],
-            options={
-                "verify_signature": False,
-                "verify_aud": False,
-            }
-        )
+        try:
+            return jwt.decode(
+                token,
+                algorithms=["RS256", "HS256"],
+                options={
+                    "verify_signature": False,
+                },
+                audience=list(dbmi_settings.AUTH_CLIENTS.keys()),
+            )
 
+        except jwt.InvalidAudienceError:
+            logger.warning(f"No configuration for aud/client ID in token")
+            return None
     else:
-        return validate_rs256_jwt(token)
+        return validate_request(request)
 
 
 def get_jwt_value(request, key, verify=True):
+    """
+    Returns the value for the passed key from the current JWT payload
 
+    :param request: The current HttpRequest object
+    :type request: HttpRequest
+    :param key: The key of the value in the JWT payload to return
+    :type key: str
+    :param verify: Whether to verify the JWT signature first
+    :type verify: bool
+    :returns: The value for the passed key
+    :rtype: str
+    """
     # Get the payload from above
     payload = get_jwt_payload(request, verify)
     if not payload:
@@ -285,12 +312,86 @@ def get_jwt_value(request, key, verify=True):
     return payload.get(key)
 
 
+def get_jwt_algorithm(request):
+    """
+    Returns the algorithm that was used to sign current JWT
+
+    :param request: The current HttpRequest object
+    :type request: HttpRequest
+    :param verify: Whether to verify the JWT signature first
+    :type verify: bool
+    :returns: The name of the algorithm, lowercase
+    :rtype: str
+    """
+    token = get_jwt(request)
+    if not token:
+        logger.debug("Could not retrieve JWT")
+        return None
+
+    return jwt.get_unverified_header(token)["alg"]
+
+
+
 def get_jwt_username(request, verify=True):
+    """
+    Returns the username of the current JWT
+
+    :param request: The current HttpRequest object
+    :type request: HttpRequest
+    :param verify: Whether to verify the JWT signature first
+    :type verify: bool
+    :returns: The current user's username
+    :rtype: str
+    """
     return get_jwt_value(request, "sub", verify)
 
 
 def get_jwt_email(request, verify=True):
+    """
+    Returns the user email of the current JWT
+
+    :param request: The current HttpRequest object
+    :type request: HttpRequest
+    :param verify: Whether to verify the JWT signature first
+    :type verify: bool
+    :returns: The current user's email
+    :rtype: str
+    """
     return get_jwt_value(request, "email", verify)
+
+
+def get_jwt_client_id(request, verify=True):
+    """
+    Returns the client ID of the application used to sign current JWT
+
+    :param request: The current HttpRequest object
+    :type request: HttpRequest
+    :param verify: Whether to verify the JWT signature first
+    :type verify: bool
+    :returns: The client ID of the JWT
+    :rtype: str
+    """
+    return get_jwt_value(request, "aud", verify)
+
+
+def get_jwt_auth_provider(request, verify=True):
+    """
+    Returns the provider of the application used to sign current JWT
+
+    :param request: The current HttpRequest object
+    :type request: HttpRequest
+    :param verify: Whether to verify the JWT signature first
+    :type verify: bool
+    :returns: The provider of the current authentication provider
+    :rtype: str
+    """
+    iss = get_jwt_value(request, "iss", verify)
+
+    # Check URLs
+    if iss.lower().contains("auth0.com"):
+        return "auth0"
+    elif iss.lower().contains("amazonaws.com"):
+        return "cognito"
 
 
 def validate_request(request):
@@ -298,329 +399,65 @@ def validate_request(request):
     Pulls the current cookie and verifies the JWT and
     then returns the JWT payload. Returns None
     if the JWT is invalid or missing.
-    :param request: The Django request object
-    :return: dict
+
+    :param request: The current HttpRequest object
+    :type request: HttpRequest
+    :returns: The verified JWT payload
+    :rtype: dict
     """
+    # Extract JWT from request.
+    token = get_jwt(request)
 
-    # Extract JWT token into a string.
-    jwt_string = get_jwt(request)
-    algorithm = None
+    # Get the payload
+    payload = get_jwt_payload(request, verify=False)
 
-    # Ensure JWT exists
-    if not jwt_string:
-        return None
+    # Get client ID
+    client_id = get_jwt_client_id(request, verify=False)
 
-    # Determine which Auth0 Client ID (aud) this JWT pertains to.
-    try:
-        unverified_header = jwt.get_unverified_header(str(jwt_string))
-        algorithm = unverified_header.get("alg", "rs256").lower()
+    # Fetch key based off algorithm
+    algorithm = get_jwt_algorithm(request)
+    if algorithm == "RS256":
 
-        # Check algorithm
-        if algorithm == "hs256":
-            return validate_hs256_jwt(jwt_string)
-
-        elif algorithm == "rs256":
-            return validate_rs256_jwt(jwt_string)
-
-        else:
-            logger.warning(f"Unsupported JWT algorithm: {algorithm}")
-            return None
-
-    except Exception as e:
-        logger.exception("Validate error: {}".format(e), exc_info=True, extra={"algorithm": algorithm})
-
-    return None
-
-
-def get_public_keys_from_auth0(tenant, domain=None, refresh=False):
-    """
-    Retrieves the public key from Auth0 to verify JWTs. Will
-    cache the JSON response from Auth0 in Django settings
-    until instructed to refresh the JWKS.
-    :param tenant: The Auth0 tenant to fetch JWKs for
-    :param domain: The domain to use if custom
-    :param refresh: Purges cached JWK and fetches from remote
-    :return: dict
-    """
-
-    # If refresh, delete cached key
-    if refresh:
-        logger.debug("Refresh requested, deleting cached JWKs")
-        delattr(dbmi_settings, f"{CACHED_JWKS_KEY}{tenant}")
-
-    try:
-        # Look in settings
-        if hasattr(dbmi_settings, f"{CACHED_JWKS_KEY}{tenant}"):
-
-            # Parse the cached dict and return it
-            return json.loads(getattr(dbmi_settings, f"{CACHED_JWKS_KEY}{tenant}"))
-
-        else:
-
-            logger.debug("Fetching remote JWKS")
-
-            # Set host
-            host = domain if domain else f"{tenant}.auth0.com"
-
-            # Build the JWKs URL
-            url = furl().set(scheme="https", host=host)
-            url.path.segments.extend([".well-known", "jwks.json"])
-
-            # Make the request
-            response = requests.get(url.url)
-            response.raise_for_status()
-
-            # Parse it
-            jwks = response.json()
-
-            # Cache it
-            setattr(dbmi_settings, f"{CACHED_JWKS_KEY}{tenant}", json.dumps(jwks))
-
-            return jwks
-
-    except KeyError as e:
-        logger.exception(f"Error getting public keys: {e}", exc_info=True, extra={"tenant": tenant})
-
-    except json.JSONDecodeError as e:
-        logger.exception(f"Error getting public keys: {e}", exc_info=True, extra={"tenant": tenant})
-
-    except requests.HTTPError as e:
-        logger.exception(f"Error getting public keys: {e}", exc_info=True, extra={"tenant": tenant})
-
-    return None
-
-
-def retrieve_public_key(tenant, jwt_string, domain=None):
-    """
-    Gets the public key used to sign the JWT from the public JWK
-    hosted on Auth0. Auth0 typically only returns one public key
-    in the JWK set but to handle situations in which signing keys
-    are being rotated, this method is build to search through
-    multiple JWK that could be in the set.
-
-    As JWKS are being cached, if a JWK cannot be found, cached
-    JWKS is purged and a new JWKS is fetched from Auth0. The
-    fresh JWKS is then searched again for the needed key.
-
-    Returns the key ID if found, otherwise returns None
-    :param tenant: The Auth0 tenant to fetch JWKs for
-    :param jwt_string: The JWT token as a string
-    :param domain: The domain to use for JWKs if necessary
-    :return: str
-    """
-
-    try:
-        # Get the JWK
-        jwks = get_public_keys_from_auth0(tenant, domain=domain, refresh=False)
-        if not jwks:
-            logger.debug("Could not fetch JWKs from Auth0, just fail out now")
-            return None
-
-        # Decode the JWTs header component
-        unverified_header = jwt.get_unverified_header(str(jwt_string))
-
-        # Check the JWK for the key the JWT was signed with
-        rsa_key = get_rsa_from_jwks(jwks, unverified_header["kid"])
-        if not rsa_key:
-            logger.debug("No matching key found in JWKS, refreshing")
-            logger.debug("Unverified JWT key id: {}".format(unverified_header["kid"]))
-            logger.debug("Cached JWK keys: {}".format([jwk["kid"] for jwk in jwks["keys"]]))
-
-            # No match found, refresh the jwks
-            jwks = get_public_keys_from_auth0(tenant, domain=domain, refresh=True)
-            logger.debug("Refreshed JWK keys: {}".format([jwk["kid"] for jwk in jwks["keys"]]))
-
-            # Try it again
-            rsa_key = get_rsa_from_jwks(jwks, unverified_header["kid"])
-            if not rsa_key:
-                logger.warning("Invalid JWT attempt", extra={"unverified_kid": unverified_header["kid"]})
-                return None
-
-        return rsa_key
-
-    except KeyError as e:
-        logger.exception("Error retrieving public keys: {}".format(e), exc_info=True, extra={"tenant": tenant})
-
-    return None
-
-
-def get_rsa_from_jwks(jwks, jwt_kid):
-    """
-    Searches the JWKS for the signing key used
-    for the JWT. Returns a dict of the JWK
-    properties if found, None otherwise.
-    :param jwks: The set of JWKs from Auth0
-    :param jwt_kid: The key ID of the signing key
-    :return: dict
-    """
-    # Build the dict containing rsa values
-    for key in jwks["keys"]:
-        if key["kid"] == jwt_kid:
-            rsa_key = {"kty": key["kty"], "kid": key["kid"], "use": key["use"], "n": key["n"], "e": key["e"]}
-
-            return rsa_key
-
-    # No matching key found, must refresh JWT keys
-    return None
-
-
-def validate_rs256_jwt(jwt_string):
-    """
-    Verifies the given RS256 JWT. Returns the payload
-    if verified, otherwise returns None.
-    :param jwt_string: JWT as a string
-    :return: dict
-    """
-    # We need the public key and the client ID to match against
-    jwk_pub_key = None
-    jwt_client_id = None
-
-    # Determine which Auth0 Client ID (aud) this JWT pertains to.
-    try:
-        jwt_client_id = str(jwt.decode(
-            jwt_string,
-            algorithms=["RS256"],
-            options={
-                "verify_signature": False,
-                "verify_aud": False,
-            }
-        )["aud"])
-
-        # Check for custom domain
-        domain = getattr(dbmi_settings, "AUTH0_DOMAIN", None)
-        if domain:
-            logger.debug(f"Using custom domain: {domain}")
-
-        # Check if multiple clients are specified at the client level
-        if hasattr(dbmi_settings, "AUTH0_CLIENTS") and getattr(dbmi_settings, "AUTH0_CLIENTS"):
-
-            # Search client IDs
-            tenant = dbmi_settings.AUTH0_CLIENTS.get(jwt_client_id, {}).get("tenant")
-            if tenant:
-                logger.debug(f"JWT Client ID matched to tenant: {tenant}")
-
-                # Get the public key
-                jwk_pub_key = retrieve_public_key(tenant, jwt_string, domain)
-
-            # Log if not found
-            else:
-                logger.info(f"JWT client {jwt_client_id} could not be matched to any clients")
-
-        # Check for multiple clients at the tenant level
-        if not jwk_pub_key and hasattr(dbmi_settings, "AUTH0_TENANTS") and getattr(dbmi_settings, "AUTH0_TENANTS"):
-
-            # Try each one
-            for tenant in dbmi_settings.AUTH0_TENANTS:
-                try:
-                    # Get the public key
-                    jwk_pub_key = retrieve_public_key(tenant, jwt_string, domain)
-
-                    # A public key was returned, we've got a JWT from this tenant
-                    if jwk_pub_key:
-                        break
-
-                except PermissionDenied:
-                    pass
-            else:
-                logger.info(
-                    f"JWT client {jwt_client_id} could not be matched to " f"any tenants: {dbmi_settings.AUTH0_TENANTS}"
-                )
-
-        # If not already matched, try default client
-        if not jwk_pub_key and jwt_client_id == dbmi_settings.AUTH0_CLIENT_ID:
-
-            # Get the public key
-            jwk_pub_key = retrieve_public_key(dbmi_settings.AUTH0_TENANT, jwt_string, domain)
-
-        if not jwk_pub_key:
-            logger.warning(f"JWT Client ID could not be matched: {jwt_client_id}")
-            return None
-
-    except Exception as e:
-        logger.exception(
-            f"Failed to get the aud from jwt payload: {e}",
-            exc_info=True,
-            extra={"jwt_client_id": jwt_client_id, "jwk_pub_key": jwk_pub_key},
+        # Match the client ID to an authentication provider
+        url = dbmi_settings.AUTH_CLIENTS[client_id]["JWKS_URL"]
+        jwks_client = PyJWKClient(
+            url,
+            cache_keys=True,
+            max_cached_keys=16,
+            cache_jwk_set=True,
+            lifespan=86400,
         )
+        key = jwks_client.get_signing_key_from_jwt(token)
+
+    elif algorithm == "HS256":
+
+        # Fetch key from auth configuration
+        key = dbmi_settings.AUTH_CLIENTS[client_id]["CLIENT_SECRET"]
+
+    else:
+        logger.warning(f"Unsupported algorithm for token: {algorithm}")
         return None
-
-    # Attempt to validate with each one
-    if jwk_pub_key:
-
-        # Get the JWK
-        jwk_key = jwk.JWK(**jwk_pub_key)
-
-        # Attempt to validate the JWT (Checks both expiry and signature)
-        try:
-            payload = jwt.decode(
-                jwt_string,
-                jwk_key.export_to_pem(private_key=False),
-                algorithms=["RS256"],
-                leeway=120,
-                audience=jwt_client_id,
-            )
-
-            return payload
-
-        except jwt.ExpiredSignatureError as e:
-            logger.debug(
-                "JWT Expired: {}".format(e), extra={"jwt_client_id": jwt_client_id, "jwk_pub_key": jwk_pub_key}
-            )
-
-        except jwt.InvalidTokenError as e:
-            logger.info(
-                "Invalid JWT Token: {}".format(e), extra={"jwt_client_id": jwt_client_id, "jwk_pub_key": jwk_pub_key}
-            )
-
-        except Exception as e:
-            logger.exception(
-                f"Error validating JWT: {e}",
-                exc_info=True,
-                extra={"jwt_client_id": jwt_client_id, "jwk_pub_key": jwk_pub_key},
-            )
-
-    return None
-
-
-def validate_hs256_jwt(jwt_string):
-    """
-    Verifies the given HS256 JWT. Returns the payload
-    if verified, otherwise returns None.
-    :param jwt_string: JWT as a string
-    :return: dict
-    """
-
-    # Check settings for proper setup
-    if not dbmi_settings.AUTH0_SECRET or not dbmi_settings.AUTH0_CLIENT_ID:
-        logger.error("Cannot verify HS256 tokens without client ID and client secret")
-        raise PermissionDenied
 
     try:
         # Perform the validation
         payload = jwt.decode(
-            jwt_string,
-            base64.b64decode(dbmi_settings.AUTH0_SECRET, "-_"),
-            algorithms=["HS256"],
+            token,
+            key,
+            algorithms=[algorithm],
             leeway=120,
-            audience=dbmi_settings.AUTH0_CLIENT_ID,
+            audience=client_id,
         )
 
         return payload
 
     except jwt.ExpiredSignatureError as e:
         logger.debug(
-            "JWT Expired: {}".format(e),
-            extra={
-                "client_id": dbmi_settings.AUTH0_CLIENT_ID,
-            },
+            f"JWT Expired: {e}",
         )
 
     except jwt.InvalidTokenError as e:
         logger.info(
-            "Invalid JWT Token: {}".format(e),
-            extra={
-                "client_id": dbmi_settings.AUTH0_CLIENT_ID,
-            },
+            f"Invalid JWT Token: {e}",
         )
 
     except Exception as e:
@@ -628,12 +465,11 @@ def validate_hs256_jwt(jwt_string):
             f"Error validating JWT: {e}",
             exc_info=True,
             extra={
-                "client_id": dbmi_settings.AUTH0_CLIENT_ID,
+                "client_id": client_id,
             },
         )
 
     return None
-
 
 ###################################################################
 #
@@ -659,7 +495,7 @@ class DBMIAuthenticationBackend(object):
                 return None
 
         # Validate request
-        payload = validate_rs256_jwt(token)
+        payload = validate_request(request)
         if not payload:
             return None
 
@@ -1361,7 +1197,7 @@ class DBMIUser(BaseAuthentication):
             raise exceptions.NotAuthenticated
 
         # User has a valid JWT from SciAuth
-        payload = validate_rs256_jwt(token)
+        payload = validate_request(request)
         if not payload:
             raise exceptions.AuthenticationFailed
 

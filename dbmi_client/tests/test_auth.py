@@ -20,7 +20,7 @@ class TestAuth(unittest.TestCase):
     def setUpClass(cls):
 
         # Patch JWT checker
-        cls.jwt_patcher = mock.patch("dbmi_client.authn.validate_rs256_jwt")
+        cls.jwt_patcher = mock.patch("dbmi_client.authn.validate_request")
         cls.mock_jwt = cls.jwt_patcher.start()
         cls.mock_jwt.return_value = True
 
