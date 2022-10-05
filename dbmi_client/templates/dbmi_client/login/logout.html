@@ -1,6 +1,5 @@
 {% extends 'dbmi_client/login/base.html' %}
 {% load bootstrap3 %}
-{% load staticfiles %}
 {% load static %}
 
 {% block title %}Logout{% endblock %}
@@ -10,7 +9,7 @@
     <div class="row">
         <div class="col-xs-8 col-xs-offset-2">
             <p>You've successfully logged out!</p>
-            <p><a href="{% url 'dbmi_login:login' %}">Return to login</a></p>
+            <p><a href="{% url 'dbmi_login:authorize' %}">Return to login</a></p>
         </div>
     </div>
 
