@@ -62,16 +62,9 @@ CONFIG_DEFAULTS = {
     "JWT_HTTP_PREFIX": "JWT ",
     "JWT_COOKIE_NAME": "DBMI_JWT",
     "JWT_COOKIE_DOMAIN": ".dbmi.hms.harvard.edu",
-    # Auth0 account details
-    "AUTH0_CLIENT_ID": None,
-    "AUTH0_SECRET": None,  # Only needed if login module is enabled
-    "AUTH0_TENANT": None,
-    "AUTH0_SCOPE": "openid email",
-    "AUTH0_DOMAIN": None, # Only if needed if using an Auth0 custom domain
-    # Auth0 clients
-    "AUTH0_CLIENTS": None,  # Use this dictionary to specify multiple auth0 tenant: {client ID, secret} configs
-    # Auth0 tenants
-    "AUTH0_TENANTS": None,  # Use this list to specify Auth0 tenants whose clients should be considered valid here
+    # Authentication provider details
+    "AUTH_CLIENTS": None,
+    "AUTH_ENCRYPTION_KEYS": [],
     # Configurations surrounding usage of a local Django user model
     "USER_MODEL_ENABLED": False,
     "USER_MODEL_AUTOCREATE": True,
@@ -97,10 +90,12 @@ CONFIG_DEFAULTS = {
 }
 
 # List of settings that cannot be defaulted and must be user-defined
-REQUIRED_SETTINGS = ("CLIENT", "AUTH0_CLIENT_ID", "AUTH0_TENANT")
+REQUIRED_SETTINGS = ("CLIENT", "AUTH_CLIENTS", )
 
 # List of settings that have been removed
-REMOVED_SETTINGS = ()
+REMOVED_SETTINGS = (
+    "AUTH0_TENANT", "AUTH0_CLIENT_ID", "AUTH0_SECRET", "AUTH0_CLIENTS", "AUTH0_TENANTS", "AUTH0_SCOPE", "AUTH0_DOMAIN"
+)
 
 
 class DBMISettings(object):
@@ -179,26 +174,35 @@ class DBMISettings(object):
         if "CLIENT" not in user_settings:
             raise AttributeError("CLIENT configuration must be set")
 
-        # Check possible Auth0 configurations (single client, multiple clients, multiple tenants)
-        if (
-            ("AUTH0_TENANT" not in user_settings or "AUTH0_CLIENT_ID" not in user_settings)
-            and "AUTH0_TENANTS" not in user_settings
-            and "AUTH0_CLIENTS" not in user_settings
-        ):
-            raise AttributeError(
-                "One of AUTH0_TENANT/AUTH0_CLIENT_ID, AUTH0_CLIENTS or " "AUTH0_TENANTS configurations must be set"
-            )
+        # Check auth configuration(s)
+        if type(user_settings["AUTH_CLIENTS"]) is not dict:
+            raise AttributeError("AUTH_CLIENTS configuration must be set as a dictionary")
 
-        # If Auth0 login enabled, ensure we've got needed Auth0 configurations
-        if "dbmi_client.login" in settings.INSTALLED_APPS and (
-            "AUTH0_TENANT" not in user_settings
-            or "AUTH0_CLIENT_ID" not in user_settings
-            or "AUTH0_SECRET" not in user_settings
-        ):
-            raise AttributeError(
-                "AUTH0_TENANT/AUTH0_CLIENT_ID/AUTH0_SECRET must be specified for "
-                'the "dbmi_client.login" app to function'
-            )
+        # Check each auth configuration
+        for _, configuration in user_settings["AUTH_CLIENTS"].items():
+
+            # Each client needs a minimum of a JWKS URL
+            if not configuration.get("JWKS_URL") and not configuration.get("CLIENT_SECRET"):
+                raise AttributeError("Each auth client required a configured JWKS_URL or CLIENT_SECRET")
+
+            # If the login app is enabled, more is required for each client
+            if "dbmi_client.login" in settings.INSTALLED_APPS:
+
+                # Check secret
+                if not configuration.get("PROVIDER"):
+                    raise AttributeError("Each auth client required a configured PROVIDER: 'auth0' or 'cognito'")
+
+                # Check secret
+                if not configuration.get("CLIENT_SECRET"):
+                    raise AttributeError("Each auth client required a configured CLIENT_SECRET")
+
+                # Check secret
+                if not configuration.get("DOMAIN"):
+                    raise AttributeError("Each auth client required a configured DOMAIN")
+
+                # Check secret
+                if not configuration.get("SCOPE"):
+                    raise AttributeError("Each auth client required a configured SCOPE")
 
         # Ensure environment is set and if not prod or dev, ensure service URLs are provided
         if (

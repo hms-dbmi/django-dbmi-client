@@ -1,16 +1,26 @@
-import requests
-import json
 import base64
-import furl
+from furl import furl
 import secrets
 from urllib.parse import urlencode
+import pytz
+from datetime import datetime
+from cryptography.fernet import MultiFernet, Fernet
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+from cryptography.hazmat.backends import default_backend
+from cryptography.fernet import InvalidToken
+from django.conf import settings
+from django.utils.encoding import force_bytes
 
+from django.conf import settings
 from django.core.exceptions import SuspiciousOperation
 from django.shortcuts import render, redirect, reverse
 from django.http import QueryDict
 from dbmi_client.settings import dbmi_settings
-from dbmi_client.authn import validate_request, get_jwt
+from dbmi_client.authn import validate_request, get_jwt, get_jwt_client_id, get_jwt_payload
 from django.contrib import auth as django_auth
+from dbmi_client.provider import ProviderFactory
+from dbmi_client.auth import dbmi_user
 
 # Get the logger
 import logging
@@ -26,27 +36,63 @@ DBMI_AUTH_CALLBACK_QUERY_KEY = "query"
 DBMI_AUTH_STATE_KEY = "state"
 
 
+def derive_fernet_key(input_key):
+    """
+    Derive a 32-bit b64-encoded Fernet key from arbitrary input key.
+
+    :param input_key: The key to convert to Fernet-compatible key
+    :type input_key: str
+    :returns: A Fernet-compatible key
+    :rtype: bytes
+    """
+    backend = default_backend()
+    info = b'dbmi-client'
+    salt = b'dbmi-client-hkdf-salt'
+    hkdf = HKDF(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=salt,
+        info=info,
+        backend=backend,
+    )
+    return base64.urlsafe_b64encode(hkdf.derive(force_bytes(input_key)))
+
+
+@dbmi_user
 def token(request):
-
-    # Ensure we've got a JWT
-    jwt = get_jwt(request)
-    if not jwt:
-        return redirect("dbmi_login:login")
-
-    # Set the token
-    context = {"jwt": jwt}
-
-    return render(request, template_name="dbmi_client/login/jwt.html", context=context)
-
-
-def login(request):
     """
-    Landing point to force user log in.
+    This view is merely a landing page for already logged in users. It will
+    display the value of their current JWT for manually signing requests and
+    let them know when it expires.
 
-    This URL is a catch-all to see if a user is already logged in. The next Querystring should be set to
-    redirect if the user is found to be logged in, or after they log in.
+    :param request: The current HTTP request object
+    :type request: HttpRequest
     """
-    logger.debug("Checking if user is logged in already.")
+
+    # Get JWT details
+    payload = get_jwt_payload(request, verify=True)
+    expiration_datetime = datetime.utcfromtimestamp(payload['exp']).replace(tzinfo=pytz.utc)
+    expiration_et_datetime = expiration_datetime.astimezone(pytz.timezone('US/Eastern'))
+
+    # Set their JWT
+    context = {
+        'jwt': get_jwt(request),
+        'jwt_expiration': expiration_et_datetime.strftime("%A %B %-d, %Y at %I:%M:%S %p ET"),
+    }
+
+    return render(request, template_name="dbmi_client/login/token.html", context=context)
+
+
+def authorize(request):
+    """
+    This is the authorize endpoint and it will verify a user is logged in and
+    redirect them accordingly or proceed with the OAuth2 process to log the user
+    in with the given auth provider.
+
+    :param request: The current HTTP request object
+    :type request: HttpRequest
+    """
+    logger.debug("Checking auth")
 
     # Check for an existing valid DBMI JWT
     if validate_request(request):
@@ -66,208 +112,200 @@ def login(request):
 
         return redirect(redirect_url)
 
+    # Get the client ID or the default client ID which is first in the settings
+    client_id = request.GET.get(DBMI_AUTH_QUERY_CLIENT_ID_KEY, next(iter(dbmi_settings.AUTH_CLIENTS.keys())))
+
     # Build a URL with the root URI
-    callback_url = furl.furl(request.build_absolute_uri(reverse("dbmi_login:callback")))
+    callback_url = furl(request.build_absolute_uri(reverse("dbmi_login:callback")))
+    logger.debug(f"Callback URL: {callback_url.url}")
 
-    # Build an encoded querystring to pass along to Auth0
-    query = {}
-    logger.debug(f"DBMISVC/AuthN: Passed parameters: {','.join(list(request.GET.keys()))}")
+    # Intialize the authentication backend
+    provider = ProviderFactory.create(client_id, callback_url.url)
+    logger.debug(f"Provider '{provider.identifier}' matched to client ID '{client_id}'")
 
-    # Check for authentication query elements
-    if request.GET.get(DBMI_AUTH_QUERY_BRANDING_KEY):
-
-        # Add it
-        query[DBMI_AUTH_QUERY_BRANDING_KEY] = request.GET[DBMI_AUTH_QUERY_BRANDING_KEY]
-
-    else:
-
-        # Add default UI customizations for Auth0 universal login
-        branding = {}
-        if dbmi_settings.AUTHN_TITLE:
-            branding["title"] = dbmi_settings.AUTHN_TITLE
-        if dbmi_settings.AUTHN_ICON_URL:
-            branding["icon_url"] = dbmi_settings.AUTHN_ICON_URL
-        if dbmi_settings.AUTHN_COLOR:
-            branding["color"] = dbmi_settings.AUTHN_COLOR
-        if dbmi_settings.AUTHN_BACKGROUND:
-            branding["background"] = dbmi_settings.AUTHN_BACKGROUND
-
-        # Add it
-        query[DBMI_AUTH_QUERY_BRANDING_KEY] = base64.urlsafe_b64encode(json.dumps(branding).encode('utf-8')).decode('utf-8')
+    # Build an encoded querystring to pass along as state
+    state = {}
+    logger.debug(f"Passed parameters: {','.join(list(request.GET.keys()))}")
 
     # Add redirect URL
     if request.GET.get(DBMI_AUTH_QUERY_NEXT_KEY):
 
         # Add it
-        query[DBMI_AUTH_QUERY_NEXT_KEY] = request.GET[DBMI_AUTH_QUERY_NEXT_KEY]
+        state[DBMI_AUTH_QUERY_NEXT_KEY] = request.GET[DBMI_AUTH_QUERY_NEXT_KEY]
 
-    # Add Auth0 client ID
-    query[DBMI_AUTH_QUERY_CLIENT_ID_KEY] = dbmi_settings.AUTH0_CLIENT_ID
-
-    # Revert the query back to query string and encode in base64
-    query = base64.urlsafe_b64encode(urlencode(query).encode('utf-8')).decode('utf-8')
-
-    # Add it
-    callback_url.query.params.add(DBMI_AUTH_CALLBACK_QUERY_KEY, query)
-
-    # Build authorize URL
-    auth0_url = dbmi_settings.AUTH0_DOMAIN if dbmi_settings.AUTH0_DOMAIN else f"{dbmi_settings.AUTH0_TENANT}.auth0.com"
-    authorize_url = furl.furl(f"https://{auth0_url}/authorize")
+    # Add client ID
+    state[DBMI_AUTH_QUERY_CLIENT_ID_KEY] = client_id
 
     # Create a token for state
-    state = secrets.token_urlsafe(32)
+    token = secrets.token_urlsafe(32)
+    state["state"] = token
 
-    # Add required parameters
-    authorize_url.query.params.add("response_type", "code")
-    authorize_url.query.params.add("client_id", dbmi_settings.AUTH0_CLIENT_ID)
-    authorize_url.query.params.add("redirect_uri", callback_url.url)
-    authorize_url.query.params.add("scope", dbmi_settings.AUTH0_SCOPE)
-    authorize_url.query.params.add("state", state)
+    # Add additional state if necessary
+    provider.set_state(request, state)
+
+    # Build authorize URL with base64 encoded state querystring
+    authorize_url = provider.get_authorize_url(
+        request,
+        base64.urlsafe_b64encode(urlencode(state).encode('utf-8')).decode('utf-8')
+    )
 
     # Create the response
-    response = redirect(authorize_url.url)
+    response = redirect(authorize_url)
+
+    # Encrypt the state querystring for storing in cookie
+    keys = [settings.SECRET_KEY] + dbmi_settings.AUTH_ENCRYPTION_KEYS
+    fernet = MultiFernet([Fernet(derive_fernet_key(k)) for k in keys])
+    state_enc = fernet.encrypt(urlencode(state).encode('utf-8')).decode('utf-8')
 
     # Place a cookie with state
     response.set_cookie(
         DBMI_AUTH_STATE_COOKIE_NAME,
-        state,
+        state_enc,
         domain=dbmi_settings.JWT_COOKIE_DOMAIN,
         secure=True,
         httponly=True,
         samesite="Lax"
     )
 
-    # Place a cookie with query
-    response.set_cookie(
-        DBMI_AUTH_QUERY_COOKIE_NAME,
-        query,
-        domain=dbmi_settings.JWT_COOKIE_DOMAIN,
-        secure=True,
-        httponly=True,
-        samesite="Lax"
-    )
-
-    # Redirect to Auth0
+    # Redirect to auth provider
     return response
+
+
+def check_state(request):
+    """
+    This endpoint is called upon callback from the auth provider and will
+    retrieve the local state as well as the state in the query of the
+    returning call to verify that they match. If they do not match, or an
+    error is encountered while fetching state, the check is failed. Returns
+    a tuple of check status, the state object.
+
+    :param request: The current HTTP request object
+    :type request: HttpRequest
+    :returns: Whether the state matches or not, the state object
+    :rtype: bool, dict
+    """
+    # Fetch some of the request parameters
+    state = None
+    try:
+        # Get query from state in returning call
+        return_state = QueryDict(base64.urlsafe_b64decode(request.GET["state"].encode('utf-8')).decode('utf-8'))
+
+        # Get encrypted state in cookies
+        state_enc = request.COOKIES.get(DBMI_AUTH_STATE_COOKIE_NAME)
+
+        # Decrypt the state cookie
+        keys = [settings.SECRET_KEY] + dbmi_settings.AUTH_ENCRYPTION_KEYS
+        fernet = MultiFernet([Fernet(derive_fernet_key(k)) for k in keys])
+        state = QueryDict(fernet.decrypt(state_enc.encode('utf-8')).decode('utf-8'), mutable=True)
+
+        # Compare state tokens
+        token = state.pop("state")
+        if token != return_state["state"]:
+            logger.error('Auth error: mismatched state',
+                extra={
+                    'request': request, 'state': state, 'token': token,
+                    'auth_error': request.GET.get('error'),
+                    'auth_error_description': request.GET.get('error_description')
+                }
+            )
+
+            # Fail the check
+            return False, state
+
+        return True, state
+
+    except InvalidToken as e:
+        logger.error(f'Failed to decrypt cookie state: {e}', exc_info=True)
+
+    except Exception as e:
+        logger.error(
+            f'Failed to load query(s): {e}',
+            exc_info=True,
+            extra={'request': request}
+        )
+
+    return False, state
 
 
 def callback(request):
     """
-    Callback from Auth0
+    This endpoint is called by the auth provider with a code that lets us
+    know the user logged into their Identity Provider successfully.
+    We need to use the code to gather the user information from the auth
+    provider and establish the DBMI_JWT cookie containing their valid JWT.
 
-    This endpoint is called by auth0 with a code that lets us know the user logged
-    into their Identity Provider successfully. We need to use the code to gather
-    the user information from Auth0 and establish the DBMI_JWT cookie.
+    :param request: The current HTTP request object
+    :type request: HttpRequest
     """
-    logger.debug("Call returned from Auth0.")
+    logger.debug("Callback")
 
-    # Fetch some of the request parameters
-    auth_url = None
-    try:
-        # Get the original query sent to dbmi-auth
-        query = QueryDict(base64.urlsafe_b64decode(
-            request.GET.get(DBMI_AUTH_CALLBACK_QUERY_KEY).encode("utf-8")
-        ).decode("utf-8"))
+    # Retrieve and check state
+    matched, state = check_state(request)
 
-        # Get the return URL
-        auth_url = furl.furl(reverse("dbmi_login:login") + "?{}".format(query.urlencode("/")))
-        logger.debug(f"dbmi-auth/login: Backup auth URL: {auth_url.url}")
-
-    except Exception as e:
-        logger.error("Failed to parse query parameters: {}".format(e), exc_info=True, extra={"request": request})
-
-        # Set an empty dict
-        query = {}
-
-    # This is a code passed back from Auth0 that is used to retrieve a token (Which is used to retrieve user info).
-    code = request.GET.get("code")
-    if not code:
-        logger.error(
-            "Auth0 code error: {} - {}".format(request.GET.get("error"), request.GET.get("error_description")),
-            extra={
-                "request": request,
-                "query": query,
-                "next_url": query.get("next"),
-                "auth0_error": request.GET.get("error"),
-                "auth0_error_description": request.GET.get("error_description"),
-            },
+    # Handle failure
+    if not matched:
+        return login_failure(
+            request,
+            "The authentication provider returned mismatching state. Please retry login.",
+            state,
         )
 
-        # Cannot proceed without code
-        raise SuspiciousOperation()
-
-    json_header = {"content-type": "application/json"}
-
-    # This is the Auth0 URL we post the code to in order to get token.
-    auth0_url = dbmi_settings.AUTH0_DOMAIN if dbmi_settings.AUTH0_DOMAIN else f"{dbmi_settings.AUTH0_TENANT}.auth0.com"
-    token_url = furl.furl(f"https://{auth0_url}/oauth/token")
+    # This is a code passed back from provider that is used to retrieve a token (Which is used to retrieve user info).
+    code = request.GET.get('code')
+    if not code:
+        logger.error('Auth code error: {} - {}'.format(
+                request.GET.get('error'),
+                request.GET.get('error_description')
+            ),
+            extra={
+                'request': request, 'state': state,
+                'auth_error': request.GET.get('error'),
+                'auth_error_description': request.GET.get('error_description')
+            }
+        )
+        return login_failure(
+            request,
+            request.GET.get('error_description'),
+            state,
+        )
 
     # Build a URL with the root URI
-    callback_url = furl.furl(request.build_absolute_uri(reverse("dbmi_login:callback")))
+    callback_url = furl(request.build_absolute_uri(reverse("dbmi_login:callback")))
 
-    # Information we pass to auth0, helps identify us and our request.
-    token_payload = {
-        "client_id": dbmi_settings.AUTH0_CLIENT_ID,
-        "client_secret": base64.b64decode(dbmi_settings.AUTH0_SECRET.encode()).decode(),
-        "redirect_uri": callback_url.url,
-        "code": code,
-        "grant_type": "authorization_code",
-    }
+    # Get the client ID
+    client_id = state.get(DBMI_AUTH_QUERY_CLIENT_ID_KEY)
 
-    # Post the code to get the token from Auth0.
-    token_response = requests.post(token_url.url, data=json.dumps(token_payload), headers=json_header)
-    if not token_response.ok:
+    # Intialize the authentication backend
+    provider = ProviderFactory.create(client_id, callback_url.url)
+    logger.debug(f"Provider '{provider.identifier}' matched to client ID '{client_id}'")
+
+    # Get the tokens
+    id_token, access_token = provider.get_tokens(request, code)
+    if not id_token or not access_token:
         logger.error(
-            "Failed to exchange token",
-            extra={
-                "request": request,
-                "response": token_response.content,
-                "status": token_response.status_code,
-                "url": token_url,
-            },
+            "No id or access tokens returned for user, cannot proceed",
+        )
+        return login_failure(
+            request,
+            "The user's tokens could not be fetched from the authentication provider.",
+            state,
         )
 
-        # Cannot proceed without token
-        raise SuspiciousOperation()
-
-    # Get tokens
-    token_info = token_response.json()
-
-    # URL we post the token to get user info.
-    user_url = furl.furl(f"https://{auth0_url}/userinfo")
-    user_url.query.params.add("access_token", token_info.get("access_token"))
-
-    # Get the user info from auth0.
-    user_response = requests.get(user_url.url)
-    if not user_response.ok:
+    # Get email
+    email = provider.get_user_email(request, access_token)
+    if not email:
         logger.error(
-            "Failed to get user info",
-            extra={
-                "request": request,
-                "response": user_response.content,
-                "status": user_response.status_code,
-                "url": user_url,
-            },
+            "No email returned for user info, cannot proceed"
         )
-
-        # Cannot proceed without user information
-        raise SuspiciousOperation()
-
-    # Get user info
-    user_info = user_response.json()
-    email = user_info.get("email")
-    jwt = token_info.get("id_token")
-
-    if not email or not jwt:
-        logger.error(
-            "No email/jwt returned for user info, cannot proceed",
-            extra={'user_info': user_info}
+        return login_failure(
+            request,
+            "The user's email address could not be fetched from the authentication provider.",
+            state,
         )
-        raise SuspiciousOperation()
 
     # Redirect the user to the page they originally requested.
-    if hasattr(dbmi_settings, "LOGIN_REDIRECT_KEY") and query.get(dbmi_settings.LOGIN_REDIRECT_KEY):
-        redirect_url = query.get(dbmi_settings.LOGIN_REDIRECT_KEY)
+    if hasattr(dbmi_settings, "LOGIN_REDIRECT_KEY") and state.get(dbmi_settings.LOGIN_REDIRECT_KEY):
+        redirect_url = state.get(dbmi_settings.LOGIN_REDIRECT_KEY)
 
     elif hasattr(dbmi_settings, "LOGIN_REDIRECT_URL"):
         redirect_url = dbmi_settings.LOGIN_REDIRECT_URL
@@ -283,36 +321,63 @@ def callback(request):
     # Set the JWT into a cookie in the response.
     response.set_cookie(
         dbmi_settings.JWT_COOKIE_NAME,
-        jwt,
+        id_token,
         domain=dbmi_settings.JWT_COOKIE_DOMAIN,
         secure=True,
         httponly=True,
         samesite="Lax"
     )
 
-    # Delete state and query cookie
+    # Delete state cookie
     response.delete_cookie(DBMI_AUTH_STATE_COOKIE_NAME, domain=dbmi_settings.JWT_COOKIE_DOMAIN)
-    response.delete_cookie(DBMI_AUTH_QUERY_COOKIE_NAME, domain=dbmi_settings.JWT_COOKIE_DOMAIN)
 
     return response
 
+
+def login_failure(request, error, query=None):
+    """
+    This method builds and returns a response intended to inform the user
+    of a login failure and provide remediation via retry.
+
+    :param request: The current HTTP request object
+    :type request: HttpRequest
+    :param error: The error message to display
+    :type error: str
+    :param query: The original query as a QueryDict to include with subsequent login attempts
+    :type query: QueryDict, defaults to None
+    """
+    # Get querystring
+    querystring = f"?{query.urlencode('/')}" if query else ""
+
+    # Get the backup authentication URL
+    auth_url = furl(
+        f"{request.build_absolute_uri(reverse('dbmi_login:authorize'))}{querystring}"
+    )
+    logger.debug(f"Backup auth URL: {auth_url.url}")
+
+    # Set context for error page
+    context = {
+        "error_description": error,
+        "retry_url": auth_url.url
+    }
+
+    # Render the error page
+    return render(request, 'dbmi_client/login/error.html', context)
+
 def logout(request):
     """
-    User logout
+    This endpoint terminates a user's logged in session and redirects them
+    accordingly. The session is both terminated via auth provider as well
+    as locally by deleting the cookie containing their JWT.
 
-    This endpoint logs out the user session from the dbmi_authn Django app.
+    :param request: The current HTTP request object
+    :type request: HttpRequest
     """
     # See if they are logged in
     if validate_request(request):
 
-        # Build the logout URL
-        url = furl.furl(f"https://{dbmi_settings.AUTH0_TENANT}.auth0.com/v2/logout")
-
-        # Add the client ID
-        url.query.params.add("client_id", dbmi_settings.AUTH0_CLIENT_ID)
-
         # Redirect the user to the logout page
-        next_url = furl.furl(request.build_absolute_uri(reverse("dbmi_login:logout")))
+        next_url = furl(request.build_absolute_uri(reverse("dbmi_login:logout")))
 
         # Look for next url
         if request.GET.get(dbmi_settings.LOGOUT_REDIRECT_KEY):
@@ -326,17 +391,24 @@ def logout(request):
                 request.GET.get(dbmi_settings.LOGOUT_REDIRECT_KEY)
             )
 
-        # Redirect the user to the landing page
-        url.query.params.set("returnTo", next_url)
+        # Get the client ID
+        client_id = get_jwt_client_id(request)
+
+        # Intialize the authentication backend
+        provider = ProviderFactory.create(client_id, None)
+        logger.debug(f"Provider '{provider.identifier}' matched to client ID '{client_id}'")
+
+        # Get the logout URL
+        url = provider.get_logout_url(request, next_url.url)
 
         # Log the URL
-        logger.debug(f"Logout URL: {url.url}")
+        logger.debug(f"Logout URL: {url}")
 
         # Ensure the request is cleared of user state
         django_auth.logout(request)
 
         # Create the response
-        response = redirect(url.url)
+        response = redirect(url)
 
         # Set the URL and purge cookies
         response.delete_cookie(dbmi_settings.JWT_COOKIE_NAME, domain=dbmi_settings.JWT_COOKIE_DOMAIN)

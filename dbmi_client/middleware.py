@@ -53,7 +53,7 @@ class DBMIAuthenticationMiddleware(MiddlewareMixin):
 
         # Check for a valid token
         token = authn.get_jwt(request)
-        if not token or not authn.validate_rs256_jwt(token):
+        if not token or not authn.validate_request(request):
             return AnonymousUser()
 
         # Get their username
@@ -200,7 +200,7 @@ class DBMIJWTAuthenticationMiddleware(MiddlewareMixin):
 
         # Check for a valid token
         token = authn.get_jwt(request)
-        if not token or not authn.validate_rs256_jwt(token):
+        if not token or not authn.validate_request(request):
             return AnonymousUser()
 
         # Get their username

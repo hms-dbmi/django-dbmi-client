@@ -1,19 +1,25 @@
 {% extends 'dbmi_client/login/base.html' %}
 {% load bootstrap3 %}
-{% load staticfiles %}
 {% load static %}
 
 {% block content %}
-    <div class="row">
-        <div class="col-xs-12">
-            <div class="input-group">
-                <span class="input-group-btn">
-                    <button id="jwt-copy" data-clipboard-target="#jwt" class="btn btn-default" data-toggle="tooltip" title="Copy to clipboard">{% bootstrap_icon "copy" %}</button>
-                </span>
-                <input id="jwt" class="form-control" placeholder="Token" aria-describedby="jwt" style="cursor: auto;" value="{{ jwt }}" readonly>
-            </div>
+<div class="row">
+    <div class="col-xs-8 col-xs-offset-2">
+        <div class="page-header">
+            <h2>DBMI Authentication</h2>
         </div>
+        <p>You've successfully logged in! Below is your current JWT you can use to authenticate requests manually:</p>
+        <div class="input-group">
+            <span class="input-group-btn">
+                <button id="jwt-copy" data-clipboard-target="#jwt" class="btn btn-default" data-toggle="tooltip" title="Copy to clipboard">{% bootstrap_icon "copy" %}</button>
+            </span>
+            <input id="jwt" class="form-control" placeholder="Token" aria-describedby="jwt" style="cursor: auto;" value="{{ jwt }}" readonly>
+        </div>
+        <br />
+        <div class="alert alert-info" role="alert">This token expires on <strong>{{ jwt_expiration }}</strong></div>
+        <p class="text-center"><a href="{% url 'dbmi_login:logout' %}">Logout</a></p>
     </div>
+</div>
 {% endblock %}
 
 {% block javascript %}

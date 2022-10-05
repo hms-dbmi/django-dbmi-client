@@ -39,7 +39,7 @@ if not settings.configured:
         DBMI_CLIENT_CONFIG={
             "CLIENT": "DBMI-Client",
             "ENVIRONMENT": "prod",
-            "AUTH0_TENANTS": "hms-dbmi",
+            "AUTH_CLIENTS": {"someauthclientid":{"JWKS_URL":"https://somejwksurl.com/","PROVIDER":"cognito"}},
         },
     )
 

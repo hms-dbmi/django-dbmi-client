@@ -5,30 +5,24 @@
     <meta charset="UTF-8">
     <title>{{ title|default:"DBMI App" }} Login</title>
 
-    {% load staticfiles %}
     {% load static %}
     {% load bootstrap3 %}
 
+    <link rel="shortcut icon" sizes="16x16 24x24 32x32 48x48" href="{% static 'dbmi_client/login/favicon/favicon.ico' %}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{% static 'dbmi_client/login/favicon/apple-touch-icon.png' %}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{% static 'dbmi_client/login/favicon/favicon-32x32.png' %}">
+    <link rel="icon" type="image/png" sizes="16x16" href="{% static 'dbmi_client/login/favicon/favicon-16x16.png' %}">
+    <link rel="manifest" href="{% static 'dbmi_client/login/favicon/site.webmanifest' %}">
+    <link rel="mask-icon" href="{% static 'dbmi_client/login/favicon/safari-pinned-tab.svg' %}" color="#5bbad5">
+    <meta name="theme-color" content="#ffffff">
+    <meta name="msapplication-config" content="{% static 'dbmi_client/login/favicon/browserconfig.xml' %}">
+    <meta name="msapplication-TileImage" content="{% static 'dbmi_client/login/favicon/mstile-large.png' %}">
+    <meta name="msapplication-TileColor" content="#da532c">
+
     {% bootstrap_css %}
 
+    <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}" />
     {% block stylesheets %}{% endblock %}
-
-    <style>
-        body {
-            background-color: crimson;
-        }
-
-        .navbar {
-            height: 105px;
-            margin-bottom: 50px;
-        }
-
-        .navbar-brand {
-          transform: translateX(-50%);
-          left: 50%;
-          position: absolute;
-        }
-    </style>
 
 </head>
     <body>
@@ -51,8 +45,6 @@
 
         <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
         {% bootstrap_javascript %}
-        <script src="https://cdn.auth0.com/js/lock/11.7.2/lock.min.js"></script>
-
         {% block javascript %}{% endblock %}
     </body>
 </html>

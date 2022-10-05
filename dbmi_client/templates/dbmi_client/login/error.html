@@ -1,0 +1,28 @@
+{% extends 'dbmi_client/login/base.html' %}
+
+{% block content %}
+
+<div class="row">
+    <div class="col-sm-2 text-right icon-col">
+        <h1><span class="glyphicon glyphicon-{% block icon-glyphicon %}warning-sign{% endblock %}
+        icon-{% block icon-color %}danger{% endblock %}"></span></h1>
+    </div>
+    <div class="col-sm-8 bs-callout bs-callout-{% block title-color %}danger{% endblock %}">
+        <h1>
+            {% block error %}Authentication Error{% endblock %}
+        </h1>
+        <p class="lead">
+            {% block description %}
+            {% if error_description %}
+            <p>{{ error_description }}</p>
+            {% else %}
+            <p>The authentication process has failed. Please re-attempt login or contact support for assistance.</p>
+            {% endif %}
+            <p><a href="{{ retry_url }}">Retry login</a></p>
+            {% endblock %}
+        </p>
+        <br />
+    </div>
+</div>
+
+{% endblock %}
