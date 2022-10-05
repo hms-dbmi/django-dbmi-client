@@ -427,7 +427,7 @@ def validate_request(request):
             cache_jwk_set=True,
             lifespan=86400,
         )
-        key = jwks_client.get_signing_key_from_jwt(token)
+        key = jwks_client.get_signing_key_from_jwt(token).key
 
     elif algorithm == "HS256":
 
