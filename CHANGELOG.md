@@ -1,3 +1,26 @@
+# [1.0.0](https://github.com/hms-dbmi/django-dbmi-client/compare/v0.5.4...v1.0.0) (2022-10-05)
+
+
+### Bug Fixes
+
+* **requirements:** Updated requirements ([d844104](https://github.com/hms-dbmi/django-dbmi-client/commit/d844104f3844bef5020bf93ac3701feaab178acf))
+
+
+### Features
+
+* **login:** Improved login app; updated for different auth providers ([64c4957](https://github.com/hms-dbmi/django-dbmi-client/commit/64c49579b70af3caf4684b6f6d940a94d2659f68))
+* **settings:** Improved settings to remove auth provider specific settings ([9a2000a](https://github.com/hms-dbmi/django-dbmi-client/commit/9a2000a7ac77a891020757fea5f424afb443ad8c))
+
+
+### BREAKING CHANGES
+
+* **login:** Changed login URLs
+
+Login app was updated for improved auth routines. URLs were changed to reflect convention on OAuth2 endpoints.
+* **settings:** Settings changes
+
+All Auth0 settings have been removed and replaced with a generic setting AUTH_CLIENTS that contains dictionaries of auth provider configurations.
+
 ## [0.5.4](https://github.com/hms-dbmi/django-dbmi-client/compare/v0.5.3...v0.5.4) (2022-09-28)
 
 
