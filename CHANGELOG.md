@@ -1,3 +1,11 @@
+## [1.0.1](https://github.com/hms-dbmi/django-dbmi-client/compare/v1.0.0...v1.0.1) (2022-10-05)
+
+
+### Bug Fixes
+
+* **authn:** Fixed RS256 verification ([edb4166](https://github.com/hms-dbmi/django-dbmi-client/commit/edb416622b77da2d3fb659393b35a1d44b4bd1da))
+* **login:** Fixed state check; fixed logout ([d031315](https://github.com/hms-dbmi/django-dbmi-client/commit/d031315f9f1769b7cfaf8ae966b2b94c0a020a5d))
+
 # [1.0.0](https://github.com/hms-dbmi/django-dbmi-client/compare/v0.5.4...v1.0.0) (2022-10-05)
 
 
