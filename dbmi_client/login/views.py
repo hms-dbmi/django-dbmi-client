@@ -34,6 +34,7 @@ DBMI_AUTH_QUERY_NEXT_KEY = dbmi_settings.LOGIN_REDIRECT_KEY
 DBMI_AUTH_QUERY_BRANDING_KEY = "branding"
 DBMI_AUTH_CALLBACK_QUERY_KEY = "query"
 DBMI_AUTH_STATE_KEY = "state"
+DBMI_AUTH_LOGOUT_COOKIE_NAME = "DBMI_AUTH_LOGOUT"
 
 
 def derive_fernet_key(input_key):
@@ -199,7 +200,7 @@ def check_state(request):
         state = QueryDict(fernet.decrypt(state_enc.encode('utf-8')).decode('utf-8'), mutable=True)
 
         # Compare state tokens
-        token = state.pop("state")
+        token = next(iter(state.pop("state")))
         if token != return_state["state"]:
             logger.error('Auth error: mismatched state',
                 extra={
@@ -379,18 +380,6 @@ def logout(request):
         # Redirect the user to the logout page
         next_url = furl(request.build_absolute_uri(reverse("dbmi_login:logout")))
 
-        # Look for next url
-        if request.GET.get(dbmi_settings.LOGOUT_REDIRECT_KEY):
-
-            # Get the passed URL
-            logger.debug('Will log user out and redirect to: {}'.format(
-                request.GET.get(dbmi_settings.LOGOUT_REDIRECT_KEY)
-            ))
-            next_url.query.params.add(
-                dbmi_settings.LOGOUT_REDIRECT_KEY,
-                request.GET.get(dbmi_settings.LOGOUT_REDIRECT_KEY)
-            )
-
         # Get the client ID
         client_id = get_jwt_client_id(request)
 
@@ -410,6 +399,24 @@ def logout(request):
         # Create the response
         response = redirect(url)
 
+        # Look for next url
+        if request.GET.get(dbmi_settings.LOGOUT_REDIRECT_KEY):
+
+            # Get the passed URL
+            logger.debug('Will log user out and redirect to: {}'.format(
+                request.GET.get(dbmi_settings.LOGOUT_REDIRECT_KEY)
+            ))
+
+            # Set the next URL into a cookie in the response.
+            response.set_cookie(
+                DBMI_AUTH_LOGOUT_COOKIE_NAME,
+                request.GET.get(dbmi_settings.LOGOUT_REDIRECT_KEY),
+                domain=dbmi_settings.JWT_COOKIE_DOMAIN,
+                secure=True,
+                httponly=True,
+                samesite="Lax"
+            )
+
         # Set the URL and purge cookies
         response.delete_cookie(dbmi_settings.JWT_COOKIE_NAME, domain=dbmi_settings.JWT_COOKIE_DOMAIN)
 
@@ -418,15 +425,21 @@ def logout(request):
     else:
         logger.debug("User has been logged out, sending to logout page")
 
-        # Look for next url
-        if request.GET.get(dbmi_settings.LOGOUT_REDIRECT_KEY):
+        # Check cookies for the redirect URL
+        next_url = request.COOKIES.get(DBMI_AUTH_LOGOUT_COOKIE_NAME)
 
-            # Get the passed URL
-            next_url = request.GET.get(dbmi_settings.LOGOUT_REDIRECT_KEY)
+        # Look for next url
+        if next_url:
+
+            # Prepare the response
+            response = redirect(next_url)
+
+            # Delete cookie with redirect URL
+            response.delete_cookie(DBMI_AUTH_LOGOUT_COOKIE_NAME, domain=dbmi_settings.JWT_COOKIE_DOMAIN)
 
             # Send them off
             logger.debug('Will redirect logged out user to: {}'.format(next_url))
-            return redirect(next_url)
+            return response
 
         # Render the logout landing page
         return render(request, "dbmi_client/login/logout.html")
