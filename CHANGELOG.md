@@ -1,3 +1,10 @@
+## [1.0.2](https://github.com/hms-dbmi/django-dbmi-client/compare/v1.0.1...v1.0.2) (2022-11-30)
+
+
+### Bug Fixes
+
+* **authn/auth/login:** Minor tweaks; added methods for extracting groups from JWT, if enabled ([0c4b894](https://github.com/hms-dbmi/django-dbmi-client/commit/0c4b8945c37b1c78ebfdfdf6c5542c78a25868e2))
+
 ## [1.0.1](https://github.com/hms-dbmi/django-dbmi-client/compare/v1.0.0...v1.0.1) (2022-10-05)
 
 
