@@ -1,9 +1,10 @@
 {
     "branches": [
         "master",
-        {name: "development", channel: "pre/rc", prerelease: "rc"},
-        {name: "beta", prerelease: true},
-        {name: "alpha", prerelease: true}
+        "+([0-9])?(.{+([0-9]),x}).x",
+        {"name": "development", "channel": "pre/rc", "prerelease": "rc"},
+        {"name": "beta", "prerelease": true},
+        {"name": "alpha", "prerelease": true}
     ],
     "plugins": [
         "@semantic-release/commit-analyzer",
@@ -15,7 +16,7 @@
           "prepareCmd": "sed -ie \"s/^__version__.*/__version__ = \\x22${nextRelease.version}\\x22/g\" dbmi_client/__init__.py && python setup.py sdist bdist_wheel"
         }],
         ["@semantic-release/git", {
-            "assets": ["dbmi_client/__init__.py", "CHANGELOG.md"],
+            "assets": ["dbmi_client/__init__.py", "CHANGELOG.md"]
         }],
         ["@semantic-release/github", {
             "assets": ["dist/*"]
