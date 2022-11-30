@@ -2,6 +2,7 @@ import base64
 from furl import furl
 import requests
 
+from dbmi_client.authn import get_jwt_payload
 from dbmi_client.provider.provider import Provider
 
 import logging
@@ -153,3 +154,25 @@ class Cognito(Provider):
         url.query.params.set('logout_uri', next_url)
 
         return url.url
+
+    def is_member_of_group(self, request, group):
+        """
+        This method inspects the claims of the current request's JWT and returns
+        whether the authentication provider has indicated membership in the
+        passed group or not.
+
+        :param request: The current request object
+        :type request: HttpRequest
+        :param group: The name of the group to check membership of
+        :type group: str
+        :returns: Whether the user belongs to the group or not
+        :rtype: bool
+        """
+        # Get payload
+        payload = get_jwt_payload(request)
+
+        # Check claims for the groups list
+        groups = payload.get("cognito:groups")
+
+        # Return membership
+        return groups and groups.get(group, False)

@@ -3,6 +3,7 @@ from furl import furl
 import json
 import base64
 from jwt import PyJWKClient
+from datetime import datetime, timedelta
 
 from django.apps import apps
 from django.contrib import auth as django_auth
@@ -26,6 +27,9 @@ logger = logging.getLogger(dbmi_settings.LOGGER_NAME)
 
 # Set a key to cache JWKs under in the DBMI.AUTH0 settings
 CACHED_JWKS_KEY = "__DBMI_CLIENT_CACHED_JWKS__"
+
+# Set the name of the cookie for testing cookies
+DBMI_TEST_COOKIE_NAME = "DBMI_TEST_COOKIE"
 
 
 def login(request):
@@ -59,8 +63,58 @@ def login_redirect(request, next_url=None):
     # Just process the logout and redirect them
     response = redirect(login_url)
 
+    # Set a test cookie
+    set_login_test_cookie(request, response)
+
     # Do needed logout functions and return the modified response
     return response
+
+
+def set_login_test_cookie(request, response):
+    """
+    Builds and sets a cookie on the current response to enable the authentication
+    service to verify whether the user has cookies enabled or not.
+    :param request: The original request object
+    :type request: HttpRequest
+    :param response: The to-be-returned response object
+    :type response: HttpResponse
+    """
+    # Set a date in the future
+    date = datetime.now() + timedelta(minutes=10)
+
+    # Set a test cookie
+    response.set_cookie(
+        DBMI_TEST_COOKIE_NAME,
+        date.strftime("%d-%m-%Y %H:%M:%S"),
+        domain=dbmi_settings.JWT_COOKIE_DOMAIN,
+        secure=True,
+        httponly=True,
+        samesite="Lax"
+    )
+
+
+def verify_login_test_cookie(request):
+    """
+    Checks for the test cookie in the current request and returns whether the
+    test was successful or not.
+    :param request: The original request object
+    :type request: HttpRequest
+    :returns: Whether the test cookie was a success or not
+    :rtype: bool
+    """
+    # Get the test cookie
+    value = request.COOKIES.get(DBMI_TEST_COOKIE_NAME)
+    if not value:
+        logger.info(f"Test cookie was not found, cannot proceed")
+        return False
+
+    # Compare date to ensure a recent test
+    if datetime.now() >= datetime.strptime(value, "%d-%m-%Y %H:%M:%S"):
+        logger.info(f"Test cookie was outdated ({value}), cannot verify cookies")
+        return False
+
+    logger.debug(f"Cookie test succeeded")
+    return True
 
 
 def login_redirect_url(request, next_url=None):

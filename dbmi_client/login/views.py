@@ -77,6 +77,7 @@ def token(request):
 
     # Set their JWT
     context = {
+        'title': dbmi_settings.AUTHN_TITLE,
         'jwt': get_jwt(request),
         'jwt_expiration': expiration_et_datetime.strftime("%A %B %-d, %Y at %I:%M:%S %p ET"),
     }
@@ -162,6 +163,7 @@ def authorize(request):
     response.set_cookie(
         DBMI_AUTH_STATE_COOKIE_NAME,
         state_enc,
+        max_age=2592000,
         domain=dbmi_settings.JWT_COOKIE_DOMAIN,
         secure=True,
         httponly=True,
@@ -441,5 +443,10 @@ def logout(request):
             logger.debug('Will redirect logged out user to: {}'.format(next_url))
             return response
 
+        # Set context
+        context = {
+            "title": dbmi_settings.AUTHN_TITLE,
+        }
+
         # Render the logout landing page
-        return render(request, "dbmi_client/login/logout.html")
+        return render(request, "dbmi_client/login/logout.html", context)
