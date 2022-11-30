@@ -131,6 +131,7 @@ def login(request):
     response.set_cookie(
         DBMI_AUTH_STATE_COOKIE_NAME,
         state,
+        max_age=2592000,
         domain=dbmi_settings.JWT_COOKIE_DOMAIN,
         secure=True,
         httponly=True,
@@ -141,6 +142,7 @@ def login(request):
     response.set_cookie(
         DBMI_AUTH_QUERY_COOKIE_NAME,
         query,
+        max_age=2592000,
         domain=dbmi_settings.JWT_COOKIE_DOMAIN,
         secure=True,
         httponly=True,
@@ -162,39 +164,82 @@ def callback(request):
     logger.debug("Call returned from Auth0.")
 
     # Fetch some of the request parameters
-    auth_url = None
+    query = {}
+    auth_url = furl.furl(reverse('login:auth'))
     try:
-        # Get the original query sent to dbmi-auth
-        query = QueryDict(base64.urlsafe_b64decode(
-            request.GET.get(DBMI_AUTH_CALLBACK_QUERY_KEY).encode("utf-8")
-        ).decode("utf-8"))
+        # Set query string
+        if request.GET.get(DBMI_AUTH_CALLBACK_QUERY_KEY):
 
-        # Get the return URL
-        auth_url = furl.furl(reverse("dbmi_login:login") + "?{}".format(query.urlencode("/")))
-        logger.debug(f"dbmi-auth/login: Backup auth URL: {auth_url.url}")
+            # Get the original query sent to dbmi_authn
+            query = QueryDict(
+                base64.urlsafe_b64decode(
+                    request.GET.get(DBMI_AUTH_CALLBACK_QUERY_KEY).encode('utf-8')
+                ).decode('utf-8')
+            )
+
+        # If not returned, check cookies
+        if not query and request.COOKIES.get(DBMI_AUTH_QUERY_COOKIE_NAME):
+            query = QueryDict(request.COOKIES.get(DBMI_AUTH_QUERY_COOKIE_NAME))
+
+        if query and type(query) is QueryDict:
+            # Get the return URL
+            auth_url = furl.furl(reverse('login:auth') + '?{}'.format(query.urlencode('/')))
 
     except Exception as e:
-        logger.error("Failed to parse query parameters: {}".format(e), exc_info=True, extra={"request": request})
+        logger.error('Failed to parse query parameters: {}'.format(e), exc_info=True, extra={'request': request})
 
-        # Set an empty dict
-        query = {}
+    logger.debug(f"DBMISVC/AuthN: Backup auth URL: {auth_url.url}")
+
+    # Check for cookie if state is passed in request
+    state = request.COOKIES.get(DBMI_AUTH_STATE_COOKIE_NAME)
+    if not state and request.GET.get('state'):
+
+        # Log it
+        logger.error(f"State cookie was not found", extra={"request": request})
+
+        # Set context for error page
+        context = {
+            "error_description": "A required cookie was not found. Please retry this login using the following link.",
+            "retry_url": auth_url.url
+        }
+
+        # Render the error page
+        return render(request, 'login/error.html', context)
+
+    if state != request.GET.get('state'):
+        logger.error('DBMISVC/AuthN: Auth0 state error: mismatched',
+            extra={
+                'request': request, 'query': query,
+                'stored_state': state, 'auth0_error': request.GET.get('error'),
+                'auth0_error_description': request.GET.get('error_description')
+            }
+        )
+
+        # Send them back to the beginning
+        raise SuspiciousOperation(f"Auth0 state did not match")
 
     # This is a code passed back from Auth0 that is used to retrieve a token (Which is used to retrieve user info).
     code = request.GET.get("code")
     if not code:
-        logger.error(
-            "Auth0 code error: {} - {}".format(request.GET.get("error"), request.GET.get("error_description")),
+        logger.error("Auth0 code error: {} - {}".format(
+                request.GET.get("error"),
+                request.GET.get("error_description")
+            ),
             extra={
-                "request": request,
-                "query": query,
-                "next_url": query.get("next"),
+                "request": request, "query": query,
                 "auth0_error": request.GET.get("error"),
                 "auth0_error_description": request.GET.get("error_description"),
             },
         )
 
-        # Cannot proceed without code
-        raise SuspiciousOperation()
+        # Set context for error page
+        context = {
+            "error_description": request.GET.get('error_description'),
+            "retry_url": auth_url.url
+        }
+
+        # Render the error page
+        return render(request, 'login/error.html', context)
 
     json_header = {"content-type": "application/json"}
 
