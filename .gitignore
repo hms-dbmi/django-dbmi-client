@@ -289,5 +289,8 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
+# Node modules
+node_modules
+
 
 # End of https://www.gitignore.io/api/osx,linux,django,python,windows,pycharm+all,visualstudiocode
