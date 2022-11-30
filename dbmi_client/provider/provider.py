@@ -84,3 +84,18 @@ class Provider(object):
         :rtype: str
         """
         raise NotImplementedError(f"This method should be implemented by subclasses")
+
+    def is_member_of_group(self, request, group):
+        """
+        This method inspects the claims of the current request's JWT and returns
+        whether the authentication provider has indicated membership in the
+        passed group or not.
+
+        :param request: The current request object
+        :type request: HttpRequest
+        :param group: The name of the group to check membership of
+        :type group: str
+        :returns: Whether the user belongs to the group or not
+        :rtype: bool
+        """
+        raise NotImplementedError(f"This method should be implemented by subclasses")

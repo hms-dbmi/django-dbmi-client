@@ -3,6 +3,7 @@ import json
 from furl import furl
 import requests
 
+from dbmi_client.authn import get_jwt_payload
 from dbmi_client.provider.provider import Provider
 from dbmi_client.login.views import DBMI_AUTH_QUERY_BRANDING_KEY
 from dbmi_client.settings import dbmi_settings
@@ -187,3 +188,34 @@ class Auth0(Provider):
         url.query.params.set('returnTo', next_url)
 
         return url.url
+
+    def is_member_of_group(self, request, group):
+        """
+        This method inspects the claims of the current request's JWT and returns
+        whether the authentication provider has indicated membership in the
+        passed group or not.
+
+        :param request: The current request object
+        :type request: HttpRequest
+        :param group: The name of the group to check membership of
+        :type group: str
+        :returns: Whether the user belongs to the group or not
+        :rtype: bool
+        """
+        # Get payload
+        payload = get_jwt_payload(request)
+
+        # Check claims for the groups list
+        groups = payload.get(dbmi_settings.JWT_AUTHZ_NAMESPACE, {}).get("groups", [])
+
+        # Iterate groups
+        for _group in groups:
+
+            # Check type
+            if type(_group) is str and _group == group:
+                return True
+
+            if type(_group) is dict and _group.get("name") == group:
+                return True
+
+        return False
