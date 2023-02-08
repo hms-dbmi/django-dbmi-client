@@ -1,6 +1,6 @@
 import mock
 import re
-import unittest
+from django.test import TestCase
 import responses
 from django.contrib.auth.models import User
 from django.test.client import RequestFactory
@@ -8,7 +8,7 @@ from dbmi_client import authz
 from dbmi_client.settings import dbmi_settings
 
 
-class TestAuthz(unittest.TestCase):
+class TestAuthz(TestCase):
 
     # User JWT
     fake_jwt = "somefakejwtalsdijlaiwjdlijawlidjasdhgashgd"

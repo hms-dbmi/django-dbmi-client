@@ -6,7 +6,7 @@ Via ``settings.configure`` you will be able to set all necessary settings
 for your app and run the tests as if you were calling ``./manage.py test``.
 """
 import sys
-from django_nose import NoseTestSuiteRunner
+import pytest
 from django.conf import settings
 
 EXTERNAL_APPS = [
@@ -21,7 +21,6 @@ EXTERNAL_APPS = [
     "django.contrib.sites",
 ]
 INTERNAL_APPS = [
-    "django_nose",
     "dbmi_client",
 ]
 INSTALLED_APPS = EXTERNAL_APPS + INTERNAL_APPS
@@ -45,7 +44,7 @@ if not settings.configured:
 
 
 def main(*test_args):
-    sys.exit(NoseTestSuiteRunner(verbosity=2, interactive=True).run_tests(test_args))
+    sys.exit(pytest.main(["-x"]))
 
 
 if __name__ == "__main__":

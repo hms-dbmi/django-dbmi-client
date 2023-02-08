@@ -22,21 +22,30 @@ exclude = '''
 [tool.tox]
 legacy_tox_ini = '''
 [tox]
-envlist = py{36,37,38}-django{111,22,30}
+envlist = py{38,39,310,311}-django{22,32,40,41}
 install_command = pip install {opts} "{packages}"
 
 [testenv]
 basepython =
-    py36: python3.6
-    py37: python3.7
     py38: python3.8
+    py39: python3.9
+    py310: python3.10
+    py311: python3.11
 
 commands =
 	nosetests {posargs}
 
 deps =
     -rrequirements-test.txt
-    django111: Django>=1.11,<1.12
     django22: Django>=2.2,<2.3
-    django30: Django>=3.0,<4.0
+    django32: Django>=3.2,<4.0
+    django40: Django>=4.0,<4.1
+    django41: Django>=4.1,<5.0
 '''
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q"
+testpaths = [
+    "dbmi_client",
+]

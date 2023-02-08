@@ -1,4 +1,4 @@
-django-nose
+pytest-django
 coverage
 mock
 responses
