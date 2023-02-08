@@ -1,3 +1,10 @@
+## [1.0.3](https://github.com/hms-dbmi/django-dbmi-client/compare/v1.0.2...v1.0.3) (2023-02-08)
+
+
+### Bug Fixes
+
+* **authn:** Fixed failure to check JWTs signed by invalid client IDs ([a230862](https://github.com/hms-dbmi/django-dbmi-client/commit/a230862b8582a71df81083d8093236aff29aa97c))
+
 ## [1.0.2](https://github.com/hms-dbmi/django-dbmi-client/compare/v1.0.1...v1.0.2) (2022-11-30)
 
 
