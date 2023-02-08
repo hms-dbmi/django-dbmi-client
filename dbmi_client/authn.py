@@ -468,6 +468,11 @@ def validate_request(request):
     # Get client ID
     client_id = get_jwt_client_id(request, verify=False)
 
+    # Ensure client ID is valid
+    if client_id not in dbmi_settings.AUTH_CLIENTS:
+        logger.warning(f"Client ID in token is invalid: {client_id}")
+        return None
+
     # Fetch key based off algorithm
     algorithm = get_jwt_algorithm(request)
     if algorithm == "RS256":
