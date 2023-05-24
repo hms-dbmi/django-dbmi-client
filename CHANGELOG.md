@@ -1,3 +1,10 @@
+## [1.0.6](https://github.com/hms-dbmi/django-dbmi-client/compare/v1.0.5...v1.0.6) (2023-05-24)
+
+
+### Bug Fixes
+
+* **login:** Fixed bug in accessing query parameters of request ([67f09b1](https://github.com/hms-dbmi/django-dbmi-client/commit/67f09b1dd710b7b8cac2098274d5d2f69449aef3))
+
 ## [1.0.5](https://github.com/hms-dbmi/django-dbmi-client/compare/v1.0.4...v1.0.5) (2023-05-24)
 
 
