@@ -191,7 +191,7 @@ def check_state(request):
     state = None
     try:
         # Check for state in request (not used for refreshes or impersonations)
-        if not request.get("state"):
+        if not request.GET.get("state"):
 
             # Nothing to compare, let it pass
             logger.warning(f"No 'state' found in request, allowing login")
