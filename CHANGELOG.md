@@ -1,3 +1,10 @@
+## [1.0.4](https://github.com/hms-dbmi/django-dbmi-client/compare/v1.0.3...v1.0.4) (2023-05-24)
+
+
+### Bug Fixes
+
+* **login:** Removed state check when not used for refreshes and impersonations ([5b22163](https://github.com/hms-dbmi/django-dbmi-client/commit/5b22163421f1f17fa932fe84a68362c542f904f6))
+
 ## [1.0.3](https://github.com/hms-dbmi/django-dbmi-client/compare/v1.0.2...v1.0.3) (2023-02-08)
 
 
