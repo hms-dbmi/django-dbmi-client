@@ -283,7 +283,7 @@ def callback(request):
     callback_url = furl(request.build_absolute_uri(reverse("dbmi_login:callback")))
 
     # Get the client ID
-    client_id = state.get(DBMI_AUTH_QUERY_CLIENT_ID_KEY)
+    client_id = state.get(DBMI_AUTH_QUERY_CLIENT_ID_KEY) if state else next(iter(dbmi_settings.AUTH_CLIENTS.keys()))
 
     # Intialize the authentication backend
     provider = ProviderFactory.create(client_id, callback_url.url)
