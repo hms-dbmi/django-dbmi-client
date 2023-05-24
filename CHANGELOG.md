@@ -1,3 +1,10 @@
+## [1.0.5](https://github.com/hms-dbmi/django-dbmi-client/compare/v1.0.4...v1.0.5) (2023-05-24)
+
+
+### Bug Fixes
+
+* **login:** Fixed issue where no state broke client ID retrieval ([35a3e7a](https://github.com/hms-dbmi/django-dbmi-client/commit/35a3e7a4eacbc4be6983d596bc1f79998e873509))
+
 ## [1.0.4](https://github.com/hms-dbmi/django-dbmi-client/compare/v1.0.3...v1.0.4) (2023-05-24)
 
 
