@@ -190,6 +190,13 @@ def check_state(request):
     # Fetch some of the request parameters
     state = None
     try:
+        # Check for state in request (not used for refreshes or impersonations)
+        if not request.get("state"):
+
+            # Nothing to compare, let it pass
+            logger.warning(f"No 'state' found in request, allowing login")
+            return True, None
+
         # Get query from state in returning call
         return_state = QueryDict(base64.urlsafe_b64decode(request.GET["state"].encode('utf-8')).decode('utf-8'))
 
