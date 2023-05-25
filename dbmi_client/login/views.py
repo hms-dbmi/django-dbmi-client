@@ -193,9 +193,14 @@ def check_state(request):
         # Check for state in request (not used for refreshes or impersonations)
         if not request.GET.get("state"):
 
-            # Nothing to compare, let it pass
+            # Nothing to compare, let it pass and return defaults
             logger.warning(f"No 'state' found in request, allowing login")
-            return True, None
+
+            # Set defaults
+            state = {
+                DBMI_AUTH_QUERY_CLIENT_ID_KEY: next(iter(dbmi_settings.AUTH_CLIENTS.keys())),
+            }
+            return True, state
 
         # Get query from state in returning call
         return_state = QueryDict(base64.urlsafe_b64decode(request.GET["state"].encode('utf-8')).decode('utf-8'))
