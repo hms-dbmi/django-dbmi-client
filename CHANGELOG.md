@@ -1,3 +1,10 @@
+## [1.0.7](https://github.com/hms-dbmi/django-dbmi-client/compare/v1.0.6...v1.0.7) (2023-05-25)
+
+
+### Bug Fixes
+
+* **login:** Fixed again for missing state ([f265ccb](https://github.com/hms-dbmi/django-dbmi-client/commit/f265ccb40b1d3d28340cc421755989d32205a3a6))
+
 ## [1.0.6](https://github.com/hms-dbmi/django-dbmi-client/compare/v1.0.5...v1.0.6) (2023-05-24)
 
 
