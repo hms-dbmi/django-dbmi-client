@@ -1,3 +1,10 @@
+## [1.0.8](https://github.com/hms-dbmi/django-dbmi-client/compare/v1.0.7...v1.0.8) (2024-03-18)
+
+
+### Bug Fixes
+
+* **dependencies:** Added 'pytz' to required dependencies ([1960cb5](https://github.com/hms-dbmi/django-dbmi-client/commit/1960cb5d5cbef42d6428747e93a1327acc74c4c6))
+
 ## [1.0.7](https://github.com/hms-dbmi/django-dbmi-client/compare/v1.0.6...v1.0.7) (2023-05-25)
 
 
