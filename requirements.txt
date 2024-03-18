@@ -6,3 +6,4 @@ furl
 pyjwt<3.0,>2.0
 django-bootstrap3
 raven>=6.9.0
+pytz
