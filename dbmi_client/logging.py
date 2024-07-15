@@ -2,7 +2,7 @@ import sys
 import logging
 
 
-def config(service, sentry=True, root_level=logging.WARNING):
+def config(service, root_level=logging.WARNING):
 
     # Set the standard configurations
     config = {
@@ -44,30 +44,6 @@ def config(service, sentry=True, root_level=logging.WARNING):
             },
         },
     }
-
-    # Add Sentry/Raven
-    if sentry:
-
-        # Add the handler
-        config["handlers"]["sentry"] = {
-            "level": "ERROR",  # To capture more than ERROR, change to WARNING, INFO, etc.
-            "class": "raven.contrib.django.raven_compat.handlers.SentryHandler",
-            "tags": {"custom-tag": "x"},
-        }
-        config["root"]["handlers"].append("sentry")
-
-        # Add the loggers
-        config["loggers"]["raven"] = {
-            "level": "WARNING",
-            "handlers": ["console"],
-            "propagate": False,
-        }
-
-        config["loggers"]["sentry.errors"] = {
-            "level": "WARNING",
-            "handlers": ["console"],
-            "propagate": False,
-        }
 
     return config
 

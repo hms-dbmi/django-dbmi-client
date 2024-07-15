@@ -328,10 +328,6 @@ logger = logging.getLogger(dbmi_settings.LOGGER_NAME)
 logger.disabled = not dbmi_settings.ENABLE_LOGGING
 logger.setLevel(dbmi_settings.LOG_LEVEL)
 
-# Set the sentry client if Raven is used
-if "raven.contrib.django.raven_compat" in settings.INSTALLED_APPS:
-    setattr(settings, "SENTRY_CLIENT", "dbmi_client.sentry.DBMISentryClient")
-
 
 def reload_dbmi_settings(*args, **kwargs):
     setting = kwargs["setting"]

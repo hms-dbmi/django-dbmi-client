@@ -1,6 +1,7 @@
 import sentry_sdk
 from furl import furl
 
+
 def sentry(sentry_dsn, sentry_trace_rate=0.0, sentry_profile_rate=0.0):
 
     def filter_transactions(event, hint):
