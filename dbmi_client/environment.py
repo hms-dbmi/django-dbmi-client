@@ -33,6 +33,29 @@ def get_int(name, default=0, required=False):
             return default
 
 
+def get_float(name, default=0.0, required=False):
+    """
+    Get a numeric value from environment and convert it accordingly.
+    Return default if value does not exist or fails to parse.
+    """
+    if name not in os.environ:
+        if required:
+            raise SystemError(f"ENV: Required parameter {name} could not be found")
+        else:
+            logger.error("ENV: Nothing found for: {}".format(name))
+            return default
+
+    try:
+        value = os.environ.get(name, default)
+        return float(value)
+    except ValueError:
+        if required:
+            raise SystemError(f"ENV: Required parameter {name} could not be parsed")
+        else:
+            logger.error("ENV: Non-numeric type found for: {}".format(name))
+            return default
+
+
 def absolute_path(*args):  # noqa
     return os.path.join(BASE_DIR, *args)
 
