@@ -1,3 +1,10 @@
+## [1.1.1](https://github.com/hms-dbmi/django-dbmi-client/compare/v1.1.0...v1.1.1) (2024-07-15)
+
+
+### Bug Fixes
+
+* **reporting:** Refactored Sentry configuration method ([88033da](https://github.com/hms-dbmi/django-dbmi-client/commit/88033daaa9d667e9165b695cd8128abcd4115c81))
+
 # [1.1.0](https://github.com/hms-dbmi/django-dbmi-client/compare/v1.0.8...v1.1.0) (2024-07-15)
 
 
