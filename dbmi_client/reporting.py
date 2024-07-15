@@ -1,7 +1,7 @@
 import sentry_sdk
 from furl import furl
 
-def config(service, sentry_dsn=None, sentry_trace_rate=0.0, sentry_profile_rate=0.0):
+def sentry(sentry_dsn, sentry_trace_rate=0.0, sentry_profile_rate=0.0):
 
     def filter_transactions(event, hint):
         parsed_url = furl(event["request"]["url"])
