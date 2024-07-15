@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/hms-dbmi/django-dbmi-client/compare/v1.0.8...v1.1.0) (2024-07-15)
+
+
+### Features
+
+* **reporting:** Added a module for configuring reporting via Sentry ([b16338e](https://github.com/hms-dbmi/django-dbmi-client/commit/b16338eab8859bd5c14b6685626506fbe9e064d0))
+
 ## [1.0.8](https://github.com/hms-dbmi/django-dbmi-client/compare/v1.0.7...v1.0.8) (2024-03-18)
 
 
