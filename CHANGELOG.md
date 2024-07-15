@@ -1,3 +1,10 @@
+## [1.1.2](https://github.com/hms-dbmi/django-dbmi-client/compare/v1.1.1...v1.1.2) (2024-07-15)
+
+
+### Bug Fixes
+
+* **environment:** Added a method to fetch a float from environment ([c69f5a8](https://github.com/hms-dbmi/django-dbmi-client/commit/c69f5a823650c2e6e7c25afc841fedeb41e8d187))
+
 ## [1.1.1](https://github.com/hms-dbmi/django-dbmi-client/compare/v1.1.0...v1.1.1) (2024-07-15)
 
 
