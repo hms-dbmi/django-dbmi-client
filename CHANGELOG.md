@@ -1,3 +1,13 @@
+# [2.0.0](https://github.com/hms-dbmi/django-dbmi-client/compare/v1.1.2...v2.0.0) (2024-07-15)
+
+
+* chore(reporting)!: Removed old Sentry and associated configurations ([f5fcb6b](https://github.com/hms-dbmi/django-dbmi-client/commit/f5fcb6be497e4b3eeb995393ad879b4cc447eab2))
+
+
+### BREAKING CHANGES
+
+* Sentry configurations have been moved
+
 ## [1.1.2](https://github.com/hms-dbmi/django-dbmi-client/compare/v1.1.1...v1.1.2) (2024-07-15)
 
 
