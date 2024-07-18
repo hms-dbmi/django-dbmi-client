@@ -1,10 +1,8 @@
 import sentry_sdk
 from furl import furl
 
-from dbmi_client.settings import dbmi_settings
 
-
-def sentry(sentry_dsn: str, release: str = None, sentry_trace_rate: float = 0.0, sentry_profile_rate: float = 0.0):
+def sentry(sentry_dsn: str, release: str = None, environment: str = None, sentry_trace_rate: float = 0.0, sentry_profile_rate: float = 0.0):
     """
     Initializes the Sentry client for the current application.
 
@@ -12,6 +10,8 @@ def sentry(sentry_dsn: str, release: str = None, sentry_trace_rate: float = 0.0,
     :type sentry_dsn: str
     :param release: The current release of the application, defaults to None
     :type release: str, optional
+    :param environment: The environment to which this applications is being deployed, defaults to None
+    :type environment: str, optional
     :param sentry_trace_rate: The rate at which traces are sent, defaults to 0.0
     :type sentry_trace_rate: float, optional
     :param sentry_profile_rate: The rate at which requests are profiled, defaults to 0.0
@@ -39,8 +39,8 @@ def sentry(sentry_dsn: str, release: str = None, sentry_trace_rate: float = 0.0,
         # of sampled transactions.
         # We recommend adjusting this value in production.
         profiles_sample_rate=sentry_profile_rate,
-        # Set the environment
-        environment=dbmi_settings.ENVIRONMENT,
+        # Set the environment if passed
+        environment=environment,
         # Set release, if passed
         release=release,
     )
