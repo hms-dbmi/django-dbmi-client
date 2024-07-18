@@ -1,3 +1,10 @@
+# [2.1.0](https://github.com/hms-dbmi/django-dbmi-client/compare/v2.0.0...v2.1.0) (2024-07-18)
+
+
+### Features
+
+* **reporting:** Added release version to Sentry initialization; sets environment ([82adc67](https://github.com/hms-dbmi/django-dbmi-client/commit/82adc67534b7a0af6a2064eba73d965cfbc3c28f))
+
 # [2.0.0](https://github.com/hms-dbmi/django-dbmi-client/compare/v1.1.2...v2.0.0) (2024-07-15)
 
 
