@@ -1,3 +1,10 @@
+# [2.2.0](https://github.com/hms-dbmi/django-dbmi-client/compare/v2.1.0...v2.2.0) (2024-07-18)
+
+
+### Features
+
+* **reporting:** Refactored method signature to allow passing environment ([91fb2b9](https://github.com/hms-dbmi/django-dbmi-client/commit/91fb2b9a583f53a9beaa9900b640a50f6f9bbc48))
+
 # [2.1.0](https://github.com/hms-dbmi/django-dbmi-client/compare/v2.0.0...v2.1.0) (2024-07-18)
 
 
