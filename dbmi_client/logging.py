@@ -1,9 +1,21 @@
 import sys
 import logging
+from typing import Optional
 
 
-def config(service, root_level=logging.WARNING):
+def config(service: str, root_level: int = logging.WARNING, logger_levels: Optional[dict[str, str]] = None) -> dict:
+    """
+    Configures logging for the current application
 
+    :param service: The name of the service to prefix logs with
+    :type service: str
+    :param root_level: The root logging level to set, defaults to logging.WARNING
+    :type root_level: int, optional
+    :param logger_levels: A mapping of loggers to the log level to be used for them, defaults to None
+    :type logger_levels: Optional[dict[str, str]], optional
+    :return: The logging configuration as a dict
+    :rtype: dict
+    """    
     # Set the standard configurations
     config = {
         "version": 1,
@@ -44,6 +56,17 @@ def config(service, root_level=logging.WARNING):
             },
         },
     }
+
+    # Check for additional logger level configurations
+    if logger_levels:
+
+        config["loggers"].update({
+            k: {
+                'handlers': ['console'],
+                'level': v,
+                'propagate': True
+            } for k, v in logger_levels.items()
+        })
 
     return config
 

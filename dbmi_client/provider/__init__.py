@@ -62,7 +62,8 @@ class ProviderFactory(object):
         except StopIteration:
             raise Exception(f"No implemented authentication provider for: '{identifier}' / '{client_id}'")
 
-        except Exception:
+        except Exception as e:
+            logger.exception(f"Provider create error: {e}", exc_info=True)
             raise Exception(f"No matching authentication provider for client id: '{client_id}'")
 
     #
