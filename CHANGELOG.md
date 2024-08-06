@@ -1,3 +1,10 @@
+# [2.3.0](https://github.com/hms-dbmi/django-dbmi-client/compare/v2.2.0...v2.3.0) (2024-08-06)
+
+
+### Features
+
+* **logging:** Added option to configure other loggers' log levels; improved logging on some authentication errors ([8c4b40e](https://github.com/hms-dbmi/django-dbmi-client/commit/8c4b40e5a364c2574172ff1711604e16a32f7f47))
+
 # [2.2.0](https://github.com/hms-dbmi/django-dbmi-client/compare/v2.1.0...v2.2.0) (2024-07-18)
 
 
