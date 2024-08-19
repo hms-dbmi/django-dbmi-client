@@ -38,7 +38,13 @@ class ProviderFactory(object):
         identifier = None
         try:
             # Match the client ID to an authentication provider
-            configuration = dbmi_settings.AUTH_CLIENTS[client_id]
+            configuration = dbmi_settings.AUTH_CLIENTS.get(client_id)
+            if not configuration and client_id.islower():
+
+                # The client ID got a bit mangled in requests and was reduced
+                # to all lowercase, attempt the lookup with this in mind.
+                configuration = {k.lower(): v for k, v in dbmi_settings.AUTH_CLIENTS.items()}[client_id]
+
             identifier = configuration["PROVIDER"]
 
             # Get the class for the provider
