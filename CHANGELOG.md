@@ -1,3 +1,10 @@
+## [2.3.1](https://github.com/hms-dbmi/django-dbmi-client/compare/v2.3.0...v2.3.1) (2024-08-19)
+
+
+### Bug Fixes
+
+* **provider:** Fixed an issue where client IDs would sometimes lose case and could not be fetched from auth providers dictionary correctly ([c3ab1e3](https://github.com/hms-dbmi/django-dbmi-client/commit/c3ab1e3e89bd0df33258f6557f7f18f64e364f94))
+
 # [2.3.0](https://github.com/hms-dbmi/django-dbmi-client/compare/v2.2.0...v2.3.0) (2024-08-06)
 
 
