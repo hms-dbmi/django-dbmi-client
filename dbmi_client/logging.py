@@ -3,6 +3,15 @@ import logging
 from typing import Optional
 
 
+# Create a filter to hide Sentry metrics transactions
+class SentryIngestFilter(logging.Filter):
+    def filter(self, record):
+        # Sentry makes a POST to this URL every minute (although configurable)
+        # so hide these messages since we still want to see POST records
+        # from other libraries
+        return "ingest.us.sentry.io" not in record.getMessage()
+
+
 def config(service: str, root_level: int = logging.WARNING, logger_levels: Optional[dict[str, str]] = None) -> dict:
     """
     Configures logging for the current application
@@ -15,7 +24,7 @@ def config(service: str, root_level: int = logging.WARNING, logger_levels: Optio
     :type logger_levels: Optional[dict[str, str]], optional
     :return: The logging configuration as a dict
     :rtype: dict
-    """    
+    """
     # Set the standard configurations
     config = {
         "version": 1,
@@ -32,6 +41,9 @@ def config(service: str, root_level: int = logging.WARNING, logger_levels: Optio
                 "class": "logging.StreamHandler",
                 "formatter": "console",
                 "stream": sys.stdout,
+                "filters": [
+                    "sentryIngestFilter",
+                ]
             },
         },
         "root": {
@@ -55,6 +67,11 @@ def config(service: str, root_level: int = logging.WARNING, logger_levels: Optio
                 'propagate': True
             },
         },
+        "filters": {
+            "sentryIngestFilter": {
+                "()": "dbmi_client.logging.SentryIngestFilter"
+            }
+        }
     }
 
     # Check for additional logger level configurations
