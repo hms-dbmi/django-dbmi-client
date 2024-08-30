@@ -1,3 +1,10 @@
+# [2.4.0](https://github.com/hms-dbmi/django-dbmi-client/compare/v2.3.1...v2.4.0) (2024-08-30)
+
+
+### Features
+
+* **logging:** Setup a filter to hide Sentry trace/profile transactions ([7004f7f](https://github.com/hms-dbmi/django-dbmi-client/commit/7004f7ff968871a9eaa95a2d73d3771b665bdb85))
+
 ## [2.3.1](https://github.com/hms-dbmi/django-dbmi-client/compare/v2.3.0...v2.3.1) (2024-08-19)
 
 
