@@ -1,0 +1,15 @@
+name: Code Scan
+
+on:
+  pull_request:
+    branches: [ master, development ]
+  schedule:
+    - cron: '0 12 * * 1' # runs at 12:00 UTC on Mondays
+  workflow_dispatch:
+
+jobs:
+  scan:
+    uses: hms-dbmi/actions/.github/workflows/code-scan.yml@main
+    secrets:
+      SONAR_HOST_URL: ${{ secrets.BLHMSDBMI_SONAR_HOST_URL }}
+      SONAR_TOKEN: ${{ secrets.BLHMSDBMI_SONAR_TOKEN }}
