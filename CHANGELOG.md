@@ -1,3 +1,10 @@
+## [2.4.1](https://github.com/hms-dbmi/django-dbmi-client/compare/v2.4.0...v2.4.1) (2025-07-26)
+
+
+### Bug Fixes
+
+* **authn:** Fixed issue where user syncing was not removing staff/superuser status if those permissions were removed from the authorization server ([0ce1ba6](https://github.com/hms-dbmi/django-dbmi-client/commit/0ce1ba6113e28e1a311f0598648356ec0dc02a54))
+
 # [2.4.0](https://github.com/hms-dbmi/django-dbmi-client/compare/v2.3.1...v2.4.0) (2024-08-30)
 
 
