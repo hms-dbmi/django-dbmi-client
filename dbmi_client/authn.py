@@ -818,7 +818,7 @@ class DBMIModelAuthenticationBackend(DBMIAuthenticationBackend):
 
         return user
 
-    def _set_superuser(self, request, user):
+    def _set_superuser(self, request, user) -> bool:
         """
         This method allows backends to determine whether or not an admin user
         should be granted Django superuser status.
@@ -830,7 +830,7 @@ class DBMIModelAuthenticationBackend(DBMIAuthenticationBackend):
         """
         return False
 
-    def _set_staff(self, request, user):
+    def _set_staff(self, request, user) -> bool:
         """
         This method allows backends to determine whether or not an admin user
         should be granted Django superuser status.
@@ -876,11 +876,8 @@ class DBMIModelAuthenticationBackend(DBMIAuthenticationBackend):
                 raise PermissionDenied
 
             # Check if superuser/staff
-            if self._set_staff(request, user):
-                user.is_staff = True
-
-            if self._set_superuser(request, user):
-                user.is_superuser = True
+            user.is_staff = self._set_staff(request, user)
+            user.is_superuser = self._set_superuser(request, user)
 
             # Save
             user.save()
@@ -967,8 +964,8 @@ class DBMIRestrictedModelAuthenticationBackend(DBMIModelAuthenticationBackend):
         :type email: str
         :return: Whether the user should be created or not
         :rtype: bool
-    """
-        return len(authz.get_permissions(request, email, item=dbmi_settings.CLIENT, children=True)) > 1
+        """
+        return len(authz.get_permissions(request, email, item=dbmi_settings.CLIENT, children=True)) >= 1
 
     def _create_user(self, request):
         """
